@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Create Workflow{% endblock %}
+{% block title %}Create Workflow | QualiX{% endblock %}
 {% block page_title %}Create Workflow{% endblock %}
 
 {% block content %}
-<div class="content-grid single" style="max-width: 640px;">
+<div class="content-grid single" style="max-width: 700px;">
     <div class="card">
         <div class="card-header">
             <h2><i class="fas fa-clock" style="color: var(--primary); margin-right: 8px;"></i> New Workflow</h2>
         </div>
         <div class="card-body">
-            <form method="post" action="{% url 'workflows:create' %}">
+            <form method="post" action="{% url 'workflows:create' %}" id="workflow-create-form">
                 {% csrf_token %}
 
                 <div class="form-group">
@@ -47,6 +47,7 @@
                     <div class="form-hint" style="margin-top: 4px;">Choose specific columns to validate, or select all / leave all unchecked to validate all columns.</div>
                 </div>
 
+                <!-- ── Schedule Type + Time ──────────────────────────────── -->
                 <div class="form-row">
                     <div class="form-group">
                         <label>Schedule Type *</label>
@@ -55,11 +56,12 @@
                             <option value="daily">Daily</option>
                             <option value="weekly">Weekly</option>
                             <option value="monthly">Monthly</option>
+                            <option value="db_trigger">DB Trigger</option>
                         </select>
                     </div>
                     <div class="form-group" id="time-group">
                         <label>Schedule Time</label>
-                        <input type="time" name="schedule_time" class="form-control" value="06:00">
+                        <input type="time" name="schedule_time" id="schedule-time-input" class="form-control" value="06:00">
                     </div>
                 </div>
 
@@ -76,9 +78,84 @@
                     </select>
                 </div>
 
+                <!-- ── DB Trigger Fields ─────────────────────────────────── -->
+                <div id="db-trigger-fields" style="display: none;">
+                    <div style="background: var(--bg-input); border: 1.5px solid var(--primary); border-radius: var(--radius-md); padding: 20px; margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px dashed var(--border-medium);">
+                            <i class="fas fa-database" style="color: var(--primary); font-size: 1.1rem;"></i>
+                            <h4 style="margin: 0; font-size: 1rem; font-weight: 600; color: var(--primary);">DB Trigger Configuration</h4>
+                        </div>
+
+                        <div style="background: rgba(59,130,246,0.08); border-left: 3px solid var(--primary); border-radius: 4px; padding: 10px 14px; margin-bottom: 16px; font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
+                            <i class="fas fa-info-circle" style="color: var(--primary); margin-right: 6px;"></i>
+                            At the scheduled time, QualiX polls <code style="background: var(--bg-card); padding: 1px 5px; border-radius: 3px;">hwm_chk</code>
+                            every <strong>60 seconds</strong> for a row where
+                            <code style="background: var(--bg-card); padding: 1px 5px; border-radius: 3px;">trigger_name = &lt;name&gt;</code>,
+                            <code style="background: var(--bg-card); padding: 1px 5px; border-radius: 3px;">hwm_flag = 'Y'</code>, and
+                            <code style="background: var(--bg-card); padding: 1px 5px; border-radius: 3px;">etl_date = TODAY</code>.
+                            When found, the workflow fires immediately.
+                        </div>
+
+                        <div class="form-group mb-12">
+                            <label style="font-weight: 600; font-size: 0.9rem;">
+                                Trigger Name *
+                                <span style="font-weight: 400; font-size: 0.8rem; color: var(--text-muted); margin-left: 6px;">
+                                    (matches <code>hwm_chk.trigger_name</code>)
+                                </span>
+                            </label>
+                            <input type="text" name="trigger_name" id="trigger-name-input"
+                                   class="form-control"
+                                   placeholder="e.g., DAILY_ACCOUNT_LOAD_COMPLETE"
+                                   style="font-family: monospace; font-size: 0.9rem;">
+                            <div class="form-hint" id="trigger-name-error" style="color: var(--danger); display: none; margin-top: 4px;">
+                                <i class="fas fa-exclamation-circle"></i> Trigger Name is required.
+                            </div>
+                        </div>
+
+                        <div class="form-row" style="gap: 16px;">
+                            <div class="form-group mb-0" style="flex: 1;">
+                                <label style="font-weight: 600; font-size: 0.9rem;">Scheduled Time *</label>
+                                <input type="time" name="trigger_scheduled_time" id="trigger-scheduled-time"
+                                       class="form-control" value="08:00">
+                                <div class="form-hint" id="trigger-time-error" style="color: var(--danger); display: none; margin-top: 4px;">
+                                    <i class="fas fa-exclamation-circle"></i> Scheduled Time is required.
+                                </div>
+                                <div class="form-hint" style="margin-top: 4px;">Time to start polling each day</div>
+                            </div>
+                            <div class="form-group mb-0" style="flex: 1;">
+                                <label style="font-weight: 600; font-size: 0.9rem;">Poll Duration</label>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="number" name="poll_duration_hours" id="poll-duration-input"
+                                           class="form-control" value="3" min="1" max="24"
+                                           style="max-width: 100px; text-align: center; font-size: 1rem; font-weight: 600;">
+                                    <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: 500;">hours</span>
+                                </div>
+                                <div class="form-hint" id="poll-duration-error" style="color: var(--danger); display: none; margin-top: 4px;">
+                                    <i class="fas fa-exclamation-circle"></i> Poll Duration must be at least 1 hour.
+                                </div>
+                                <div class="form-hint" style="margin-top: 4px;">Timeout after this window (default: 3 hrs)</div>
+                            </div>
+                        </div>
+
+                        <!-- Visual polling timeline -->
+                        <div id="trigger-timeline" style="margin-top: 16px; padding: 12px; background: var(--bg-card); border-radius: var(--radius-md); border: 1px solid var(--border-light); font-size: 0.82rem;">
+                            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">
+                                <i class="fas fa-stream" style="color: var(--primary); margin-right: 6px;"></i>Polling Timeline Preview
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); flex-wrap: wrap;">
+                                <span id="tl-start" class="badge badge-primary" style="font-size: 0.78rem;">08:00 — Start Polling</span>
+                                <i class="fas fa-arrow-right" style="font-size: 0.7rem;"></i>
+                                <span style="font-size: 0.78rem;">Poll every 60s</span>
+                                <i class="fas fa-arrow-right" style="font-size: 0.7rem;"></i>
+                                <span id="tl-end" class="badge badge-warning" style="font-size: 0.78rem;">11:00 — Timeout</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card-footer" style="padding: 24px 0 0; border-top: 1px solid var(--border-light);">
                     <a href="{% url 'workflows:list' %}" class="btn btn-outline">Cancel</a>
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary" onclick="return validateWorkflowForm()">
                         <i class="fas fa-save"></i> Create Workflow
                     </button>
                 </div>
@@ -91,19 +168,56 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const typeSelect = document.getElementById('schedule-type');
-    const timeGroup = document.getElementById('time-group');
-    const dayGroup = document.getElementById('day-group');
+    const timeGroup  = document.getElementById('time-group');
+    const dayGroup   = document.getElementById('day-group');
+    const dbFields   = document.getElementById('db-trigger-fields');
 
-    typeSelect.addEventListener('change', function() {
-        const val = this.value;
-        timeGroup.style.display = (val === 'manual') ? 'none' : 'block';
-        dayGroup.style.display = (val === 'weekly' || val === 'monthly') ? 'block' : 'none';
-    });
+    function applyScheduleType(val) {
+        // Standard time picker
+        timeGroup.style.display  = (val === 'manual' || val === 'db_trigger') ? 'none' : 'block';
+        dayGroup.style.display   = (val === 'weekly' || val === 'monthly') ? 'block' : 'none';
+        dbFields.style.display   = (val === 'db_trigger') ? 'block' : 'none';
 
-    // Dynamic Column Loader
-    const mappingSelect = document.getElementById('workflow-mapping-select');
-    const colsGroup = document.getElementById('workflow-columns-group');
-    const colsContainer = document.getElementById('workflow-columns-container');
+        // Toggle required on db trigger inputs
+        const triggerName = document.getElementById('trigger-name-input');
+        const triggerTime = document.getElementById('trigger-scheduled-time');
+        if (val === 'db_trigger') {
+            triggerName.setAttribute('required', '');
+            triggerTime.setAttribute('required', '');
+        } else {
+            triggerName.removeAttribute('required');
+            triggerTime.removeAttribute('required');
+        }
+    }
+
+    typeSelect.addEventListener('change', function() { applyScheduleType(this.value); });
+    applyScheduleType(typeSelect.value);
+
+    // ── Timeline preview updater ─────────────────────────────────────────────
+    const timeInput  = document.getElementById('trigger-scheduled-time');
+    const durInput   = document.getElementById('poll-duration-input');
+    const tlStart    = document.getElementById('tl-start');
+    const tlEnd      = document.getElementById('tl-end');
+
+    function updateTimeline() {
+        const t = timeInput.value;          // "HH:MM"
+        const dur = parseInt(durInput.value) || 3;
+        if (!t) return;
+        const [h, m] = t.split(':').map(Number);
+        const endH = (h + dur) % 24;
+        const fmt = (hh, mm) => `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+        tlStart.textContent = `${fmt(h, m)} — Start Polling`;
+        tlEnd.textContent   = `${fmt(endH, m)} — Timeout`;
+    }
+
+    timeInput.addEventListener('change', updateTimeline);
+    durInput.addEventListener('input', updateTimeline);
+    updateTimeline();
+
+    // ── Dynamic Column Loader ────────────────────────────────────────────────
+    const mappingSelect  = document.getElementById('workflow-mapping-select');
+    const colsGroup      = document.getElementById('workflow-columns-group');
+    const colsContainer  = document.getElementById('workflow-columns-container');
 
     if (mappingSelect && colsGroup && colsContainer) {
         mappingSelect.addEventListener('change', function() {
@@ -111,7 +225,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (mappingId) {
                 colsContainer.innerHTML = '<span>Loading columns...</span>';
                 colsGroup.style.display = 'block';
-                
                 fetch(`/mappings/api/columns/${mappingId}/`)
                     .then(r => r.json())
                     .then(data => {
@@ -143,6 +256,52 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function toggleAllCheckboxes(selector, check = true) {
     document.querySelectorAll(selector).forEach(cb => cb.checked = check);
+}
+
+function validateWorkflowForm() {
+    const scheduleType = document.getElementById('schedule-type').value;
+    if (scheduleType !== 'db_trigger') return true;
+
+    let valid = true;
+
+    const triggerName  = document.getElementById('trigger-name-input');
+    const triggerTime  = document.getElementById('trigger-scheduled-time');
+    const pollDuration = document.getElementById('poll-duration-input');
+    const nameErr      = document.getElementById('trigger-name-error');
+    const timeErr      = document.getElementById('trigger-time-error');
+    const durErr       = document.getElementById('poll-duration-error');
+
+    // Reset
+    nameErr.style.display = 'none';
+    timeErr.style.display = 'none';
+    durErr.style.display  = 'none';
+    triggerName.style.borderColor = '';
+    triggerTime.style.borderColor = '';
+    pollDuration.style.borderColor = '';
+
+    if (!triggerName.value.trim()) {
+        nameErr.style.display = 'block';
+        triggerName.style.borderColor = 'var(--danger)';
+        triggerName.focus();
+        valid = false;
+    }
+
+    if (!triggerTime.value) {
+        timeErr.style.display = 'block';
+        triggerTime.style.borderColor = 'var(--danger)';
+        if (valid) triggerTime.focus();
+        valid = false;
+    }
+
+    const dur = parseInt(pollDuration.value);
+    if (!dur || dur < 1) {
+        durErr.style.display = 'block';
+        pollDuration.style.borderColor = 'var(--danger)';
+        if (valid) pollDuration.focus();
+        valid = false;
+    }
+
+    return valid;
 }
 </script>
 {% endblock %}

@@ -1,25 +1,47 @@
 {% extends "base.html" %}
 
-{% block title %}Workflow: {{ workflow.name }}{% endblock %}
+{% block title %}Workflow: {{ workflow.name }} | QualiX{% endblock %}
 {% block page_title %}Workflow Details{% endblock %}
 
 {% block content %}
-<div class="card" style="max-width: 720px;">
+<div class="card" style="max-width: 800px;">
     <div class="card-header">
-        <h2><i class="fas fa-clock" style="color: var(--primary); margin-right: 8px;"></i> {{ workflow.name }}</h2>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            {% if workflow.schedule_type == 'db_trigger' %}
+                <i class="fas fa-database" style="color: var(--primary); font-size: 1.2rem;"></i>
+            {% else %}
+                <i class="fas fa-clock" style="color: var(--primary); font-size: 1.2rem;"></i>
+            {% endif %}
+            <h2 style="margin: 0;">{{ workflow.name }}</h2>
+            {% if workflow.schedule_type == 'db_trigger' %}
+            <span class="badge badge-{{ workflow.trigger_status_color }}" id="trigger-status-badge"
+                  style="font-size: 0.8rem; padding: 4px 10px;">
+                {{ workflow.get_trigger_status_display }}
+            </span>
+            {% endif %}
+        </div>
         {% if user_profile.role != 'auditor' %}
         <div class="d-flex gap-8">
+            {% if workflow.schedule_type == 'db_trigger' %}
+            <button class="btn btn-sm btn-outline" id="start-polling-btn"
+                    onclick="startDbTriggerPolling({{ workflow.id }})"
+                    {% if not workflow.is_active %}disabled{% endif %}>
+                <i class="fas fa-satellite-dish"></i> Start Polling
+            </button>
+            {% endif %}
             <button class="btn btn-sm btn-primary" onclick="triggerWorkflow({{ workflow.id }})">
                 <i class="fas fa-play"></i> Trigger Now
             </button>
         </div>
         {% endif %}
     </div>
+
     <div class="card-body">
         {% if workflow.description %}
         <p class="text-muted mb-16">{{ workflow.description }}</p>
         {% endif %}
 
+        <!-- ── Core Info ──────────────────────────────────────────────────── -->
         <div class="form-row mb-16">
             <div>
                 <span class="text-muted">Mapping:</span>
@@ -55,6 +77,76 @@
             </div>
         </div>
 
+        <!-- ── DB Trigger Config Block ─────────────────────────────────────── -->
+        {% if workflow.schedule_type == 'db_trigger' %}
+        <div style="background: var(--bg-input); border: 1.5px solid var(--primary); border-radius: var(--radius-md); padding: 20px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px dashed var(--border-medium);">
+                <i class="fas fa-database" style="color: var(--primary);"></i>
+                <h4 style="margin: 0; font-weight: 600; color: var(--primary);">DB Trigger Configuration</h4>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                <div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Trigger Name</div>
+                    <code style="background: var(--bg-card); padding: 4px 8px; border-radius: 4px; font-size: 0.9rem; color: var(--primary);">
+                        {{ workflow.trigger_name }}
+                    </code>
+                </div>
+                <div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Polling Starts At</div>
+                    <span style="font-weight: 600;">
+                        {{ workflow.trigger_scheduled_time|time:"H:i"|default:"Not set" }}
+                    </span>
+                </div>
+                <div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Poll Duration</div>
+                    <span style="font-weight: 600;">{{ workflow.poll_duration_hours }} hour{{ workflow.poll_duration_hours|pluralize }}</span>
+                </div>
+            </div>
+
+            <!-- Status row -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                <div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Trigger Status</div>
+                    <span class="badge badge-{{ workflow.trigger_status_color }}" id="detail-trigger-status"
+                          style="font-size: 0.85rem; padding: 5px 12px;">
+                        {{ workflow.get_trigger_status_display }}
+                    </span>
+                </div>
+                <div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Last Polled</div>
+                    <span id="detail-last-polled">
+                        {{ workflow.trigger_last_polled|date:"d M Y H:i:s"|default:"—" }}
+                    </span>
+                </div>
+            </div>
+
+            {% if workflow.trigger_fired_at %}
+            <div style="background: rgba(34,197,94,0.1); border-left: 3px solid var(--success); border-radius: 4px; padding: 10px 14px; font-size: 0.85rem;">
+                <i class="fas fa-check-circle" style="color: var(--success); margin-right: 6px;"></i>
+                Trigger fired at <strong>{{ workflow.trigger_fired_at|date:"d M Y H:i:s" }}</strong>
+            </div>
+            {% endif %}
+
+            <!-- DB Query reference -->
+            <div style="margin-top: 16px; padding: 12px; background: var(--bg-card); border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+                <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px;">
+                    <i class="fas fa-code" style="margin-right: 4px;"></i>Poll Query
+                </div>
+                <pre style="margin: 0; font-size: 0.78rem; color: var(--text-primary); white-space: pre-wrap; line-height: 1.6;"><code>SELECT * FROM hwm_chk
+WHERE trigger_name = '{{ workflow.trigger_name }}'
+  AND hwm_flag     = 'Y'
+  AND etl_date     = CURRENT_DATE;</code></pre>
+            </div>
+        </div>
+
+        <!-- Auto-refresh status for polling workflows -->
+        <div id="polling-live-indicator" style="display: none; align-items: center; gap: 8px; margin-bottom: 16px; padding: 10px 14px; background: rgba(59,130,246,0.08); border-radius: var(--radius-md); font-size: 0.85rem;">
+            <span style="width: 10px; height: 10px; background: var(--primary); border-radius: 50%; animation: pulse 1.5s infinite;" class="pulse-dot"></span>
+            <span style="color: var(--primary); font-weight: 500;">Polling active — page auto-refreshes every 30 seconds</span>
+        </div>
+        {% endif %}
+
         {% if workflow.cron_expression %}
         <div class="alert alert-info">
             <strong>Cron:</strong> <code>{{ workflow.cron_expression }}</code>
@@ -62,4 +154,81 @@
         {% endif %}
     </div>
 </div>
+
+{% if workflow.schedule_type == 'db_trigger' %}
+{% block extra_js %}
+<script>
+const workflowId = {{ workflow.id }};
+let statusRefreshTimer = null;
+
+function startDbTriggerPolling(id) {
+    if (!confirm('Start DB Trigger polling for this workflow now?')) return;
+    fetch(`/workflows/api/start-db-trigger/${id}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Polling started — checking hwm_chk every 60 seconds', 'success');
+            document.getElementById('start-polling-btn').disabled = true;
+            startStatusRefresh();
+        } else {
+            showToast(data.error || 'Failed to start polling', 'error');
+        }
+    })
+    .catch(() => showToast('Network error', 'error'));
+}
+
+function refreshTriggerStatus() {
+    fetch(`/workflows/api/trigger-status/${workflowId}/`)
+        .then(r => r.json())
+        .then(data => {
+            // Update status badge in header and detail block
+            ['trigger-status-badge', 'detail-trigger-status'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = data.trigger_status_display;
+            });
+
+            // Update last polled
+            const lp = document.getElementById('detail-last-polled');
+            if (lp && data.trigger_last_polled) {
+                lp.textContent = new Date(data.trigger_last_polled).toLocaleString('en-IN');
+            }
+
+            // Show/hide live indicator
+            const liveInd = document.getElementById('polling-live-indicator');
+            if (liveInd) {
+                liveInd.style.display = (data.trigger_status === 'polling') ? 'flex' : 'none';
+            }
+
+            // Stop auto-refresh once terminal state reached
+            if (['triggered', 'timeout', 'idle', 'error'].includes(data.trigger_status)) {
+                if (statusRefreshTimer) { clearInterval(statusRefreshTimer); statusRefreshTimer = null; }
+                if (data.trigger_status === 'triggered') {
+                    showToast('Trigger fired! Workflow is running.', 'success');
+                    setTimeout(() => location.reload(), 2000);
+                }
+            }
+        })
+        .catch(() => {});
+}
+
+function startStatusRefresh() {
+    document.getElementById('polling-live-indicator').style.display = 'flex';
+    if (!statusRefreshTimer) {
+        statusRefreshTimer = setInterval(refreshTriggerStatus, 30000);
+    }
+}
+
+// Auto-start refresh if currently polling
+document.addEventListener('DOMContentLoaded', function() {
+    const statusEl = document.getElementById('detail-trigger-status');
+    if (statusEl && statusEl.textContent.trim() === 'Polling') {
+        startStatusRefresh();
+    }
+});
+</script>
+{% endblock %}
+{% endif %}
 {% endblock %}

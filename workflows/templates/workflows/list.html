@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Workflows{% endblock %}
+{% block title %}Workflows | QualiX{% endblock %}
 {% block page_title %}Workflows{% endblock %}
 
 {% block content %}
@@ -24,17 +24,47 @@
                         <i class="fas fa-calendar-day"></i>
                     {% elif workflow.schedule_type == 'weekly' %}
                         <i class="fas fa-calendar-week"></i>
+                    {% elif workflow.schedule_type == 'db_trigger' %}
+                        <i class="fas fa-database"></i>
                     {% else %}
                         <i class="fas fa-clock"></i>
                     {% endif %}
                 </div>
                 <div class="schedule-details">
-                    <h4>{{ workflow.name }}</h4>
-                    <p>
-                        {{ workflow.mapping.name }} •
+                    <h4 style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        {{ workflow.name }}
+                        {% if workflow.schedule_type == 'db_trigger' %}
+                        <span class="badge badge-{{ workflow.trigger_status_color }}"
+                              style="font-size: 0.72rem; padding: 2px 8px; font-weight: 600;">
+                            {{ workflow.get_trigger_status_display }}
+                        </span>
+                        {% endif %}
+                    </h4>
+                    <p style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                        {{ workflow.mapping.name }}
+                        <span style="color: var(--border-medium);">•</span>
                         {{ workflow.get_schedule_type_display }}
-                        {% if workflow.schedule_time %} at {{ workflow.schedule_time|time:"H:i" }}{% endif %}
-                        {% if workflow.last_run %} • Last run: {{ workflow.last_run|date:"d M H:i" }}{% endif %}
+                        {% if workflow.schedule_type == 'db_trigger' %}
+                            {% if workflow.trigger_name %}
+                            <span style="color: var(--border-medium);">•</span>
+                            <code style="font-size: 0.78rem; background: var(--bg-input); padding: 1px 6px; border-radius: 3px; color: var(--primary);">{{ workflow.trigger_name }}</code>
+                            {% endif %}
+                            {% if workflow.trigger_scheduled_time %}
+                            <span style="color: var(--border-medium);">•</span>
+                            Polls at {{ workflow.trigger_scheduled_time|time:"H:i" }}
+                            <span style="color: var(--border-medium);">•</span>
+                            {{ workflow.poll_duration_hours }}h window
+                            {% endif %}
+                        {% else %}
+                            {% if workflow.schedule_time %}
+                            <span style="color: var(--border-medium);">•</span>
+                            at {{ workflow.schedule_time|time:"H:i" }}
+                            {% endif %}
+                        {% endif %}
+                        {% if workflow.last_run %}
+                        <span style="color: var(--border-medium);">•</span>
+                        Last run: {{ workflow.last_run|date:"d M H:i" }}
+                        {% endif %}
                     </p>
                 </div>
             </div>
@@ -45,6 +75,14 @@
                            onchange="toggleWorkflow({{ workflow.id }}, this.checked)">
                     <span class="toggle-slider"></span>
                 </label>
+                {% if workflow.schedule_type == 'db_trigger' %}
+                <button class="btn btn-sm btn-outline" style="font-size: 0.8rem;"
+                        onclick="startDbTriggerPolling({{ workflow.id }})"
+                        title="Start DB Trigger polling now"
+                        {% if not workflow.is_active %}disabled{% endif %}>
+                    <i class="fas fa-satellite-dish"></i>
+                </button>
+                {% endif %}
                 <button class="btn btn-sm btn-primary" onclick="triggerWorkflow({{ workflow.id }})">
                     <i class="fas fa-play"></i> Trigger
                 </button>
@@ -68,4 +106,25 @@
         {% endfor %}
     </div>
 </div>
+
+{% block extra_js %}
+<script>
+function startDbTriggerPolling(workflowId) {
+    if (!confirm('Start DB Trigger polling for this workflow now?')) return;
+    fetch(`/workflows/api/start-db-trigger/${workflowId}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Polling started — checking hwm_chk every 60s', 'success');
+        } else {
+            showToast(data.error || 'Failed to start polling', 'error');
+        }
+    })
+    .catch(() => showToast('Network error', 'error'));
+}
+</script>
+{% endblock %}
 {% endblock %}
