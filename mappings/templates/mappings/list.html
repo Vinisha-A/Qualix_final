@@ -55,10 +55,13 @@
                         <td>{{ mapping.created_by.get_full_name|default:mapping.created_by.username }}</td>
                         <td>
                             <div class="d-flex gap-8">
-                                <a href="{% url 'mappings:detail' mapping.id %}" class="btn btn-sm btn-secondary">
+                                <a href="{% url 'mappings:detail' mapping.id %}" class="btn btn-sm btn-secondary" title="View Pipeline Details">
                                     <i class="fas fa-eye"></i>
                                 </a>
                                 {% if user_profile.role != 'auditor' %}
+                                <a href="{% url 'mappings:edit' mapping.id %}" class="btn btn-sm btn-outline" title="Edit Pipeline">
+                                    <i class="fas fa-edit"></i>
+                                </a>
                                 <button class="btn btn-sm btn-primary" onclick="triggerValidation({{ mapping.id }})">
                                     <i class="fas fa-play"></i> Run
                                 </button>

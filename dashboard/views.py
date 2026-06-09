@@ -141,3 +141,410 @@ def api_clear_notifications(request):
          return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
     request.user.notifications.filter(is_read=False).update(is_read=True)
     return JsonResponse({'success': True, 'message': 'All notifications marked as read'})
+
+
+# Help Center Operations Data Dictionary
+HELP_DATA = {
+    'string': {
+        'title': 'String Operations Documentation',
+        'ops': [
+            {
+                'alias': 'Null Check',
+                'name': 'null_check',
+                'logic': 'Counts the number of missing (null) values in the string column.',
+                'match': 'The count of missing values matches exactly between source and target.',
+                'mismatch': 'The count of missing values differs.'
+            },
+            {
+                'alias': 'Length Check',
+                'name': 'length_sum_check',
+                'logic': 'Calculates the sum of the lengths of all string values in the column and compares them.',
+                'match': 'The total sum of character counts matches exactly between source and target.',
+                'mismatch': 'The total sum of character counts differs, suggesting formatting or content differences.'
+            },
+            {
+                'alias': 'Sum Length',
+                'name': 'sum_length',
+                'logic': 'Similar to length check, aggregates the character lengths of all rows.',
+                'match': 'Sum of character lengths matches.',
+                'mismatch': 'Sum of character lengths differs.'
+            },
+            {
+                'alias': 'Duplicate Check',
+                'name': 'duplicate_check',
+                'logic': 'Calculates the count of duplicate string entries in the column.',
+                'match': 'The count of duplicate values matches between source and target (both should be 0).',
+                'mismatch': 'There is a mismatch of duplicate values.'
+            },
+            {
+                'alias': 'Case Insensitive Check',
+                'name': 'case_insensitive_check',
+                'logic': 'Compiles strings when case do not match, converting both source and target values to lowercase. Removes space variations.',
+                'match': 'Strings match after ignoring casing variation (e.g. \'HDFC Bank\' matches \'hdfc bank\').',
+                'mismatch': 'Different characters are found, or spelling differs (e.g. \'HDFC Bank\' vs \'HDFC Bank Ltd\').'
+            },
+            {
+                'alias': 'Trim Check',
+                'name': 'trim_check',
+                'logic': 'Counts the number of records with leading or trailing whitespace characters.',
+                'match': 'Both source and target contain the same number of trimmed/untrimmed values.',
+                'mismatch': 'Mismatches due to differing whitespace, space padding.'
+            },
+            {
+                'alias': 'Contains Check',
+                'name': 'contains_check',
+                'logic': 'Counts the number of rows where the column contains the specified substring.',
+                'match': 'Count of records containing the substring matches between source and target.',
+                'mismatch': 'The counts of substring matching rows differ.'
+            },
+            {
+                'alias': 'Pattern Match',
+                'name': 'pattern_match',
+                'logic': 'Verifies string values against a regular expression pattern (wildcards/likes).',
+                'match': 'The count of values matching the pattern matches in both tables.',
+                'mismatch': 'The count of values matching the pattern differs.'
+            },
+            {
+                'alias': 'Regex Check',
+                'name': 'regex_check',
+                'logic': 'Verifies string values against a regular expression pattern.',
+                'match': 'The count of matching regex patterns matches in both tables.',
+                'mismatch': 'The count of matching regex patterns differs.'
+            },
+            {
+                'alias': 'Count',
+                'name': 'count',
+                'logic': 'Counts the number of non-null string values in the column.',
+                'match': 'The count of non-null values matches between source and target.',
+                'mismatch': 'The count of non-null values differs.'
+            },
+            {
+                'alias': 'Row Count Match',
+                'name': 'row_count',
+                'logic': 'Compares the total number of records (including nulls) in the source and target tables.',
+                'match': 'The total row count of both tables is identical.',
+                'mismatch': 'The total row count of the tables differs.'
+            },
+            {
+                'alias': 'Unique Check',
+                'name': 'unique_check',
+                'logic': 'Verifies that all values in the column are unique (no duplicates).',
+                'match': 'Both source and target columns are unique with zero duplicates.',
+                'mismatch': 'One or both columns contain duplicates.'
+            },
+            {
+                'alias': 'Distinct Count',
+                'name': 'distinct_count',
+                'logic': 'Calculates the number of unique non-null values in the column.',
+                'match': 'The count of distinct values matches exactly between source and target.',
+                'mismatch': 'The count of distinct values differs.'
+            },
+            {
+                'alias': 'Data Type Check',
+                'name': 'data_type_check',
+                'logic': 'Verifies that the column data types are compatible character string types (e.g. VARCHAR vs TEXT).',
+                'match': 'Datatypes of source and target are compatible character types.',
+                'mismatch': 'Data types are incompatible (e.g. integer vs varchar).'
+            },
+            {
+                'alias': 'Hash Validation',
+                'name': 'hash_validation',
+                'logic': 'Aggregates or compares a checksum of the column\'s data values.',
+                'match': 'The generated hash sum matches between source and target.',
+                'mismatch': 'The generated hash sum does not match, indicating differences in some data rows.'
+            }
+        ]
+    },
+    'integer': {
+        'title': 'Integer Operations Documentation',
+        'ops': [
+            {
+                'alias': 'Null Check',
+                'name': 'null_check',
+                'logic': 'Counts null integer entries in the column.',
+                'match': 'Missing integer count matches exactly between source and target.',
+                'mismatch': 'Missing integer count differs.'
+            },
+            {
+                'alias': 'Min Value Check',
+                'name': 'min',
+                'logic': 'Finds the minimum value in the integer column.',
+                'match': 'The minimum value matches exactly between source and target.',
+                'mismatch': 'The minimum value differs.'
+            },
+            {
+                'alias': 'Max Value Check',
+                'name': 'max',
+                'logic': 'Finds the maximum value in the integer column.',
+                'match': 'The maximum value matches exactly between source and target.',
+                'mismatch': 'The maximum value differs.'
+            },
+            {
+                'alias': 'Sum Check',
+                'name': 'sum',
+                'logic': 'Sums all integer values in the column.',
+                'match': 'Sum of integer values matches exactly between source and target.',
+                'mismatch': 'Sum of integer values differs.'
+            },
+            {
+                'alias': 'Average Check',
+                'name': 'avg',
+                'logic': 'Computes the arithmetic mean of all non-null integers.',
+                'match': 'The average value matches exactly between source and target.',
+                'mismatch': 'The average value differs.'
+            },
+            {
+                'alias': 'Range Check',
+                'name': 'range_check',
+                'logic': 'Checks if integer values fall within a specific range.',
+                'match': 'The count of integers within the range matches.',
+                'mismatch': 'The count of integers within the range differs.'
+            },
+            {
+                'alias': 'Duplicate Check',
+                'name': 'duplicate_check',
+                'logic': 'Counts duplicate integer values in the column.',
+                'match': 'Duplicate integer count matches.',
+                'mismatch': 'Duplicate integer count differs.'
+            },
+            {
+                'alias': 'Count',
+                'name': 'count',
+                'logic': 'Counts non-null integer values in the column.',
+                'match': 'Non-null integer count matches exactly.',
+                'mismatch': 'Non-null integer count differs.'
+            },
+            {
+                'alias': 'Row Count Match',
+                'name': 'row_count',
+                'logic': 'Compares total rows in source and target.',
+                'match': 'Total row count matches exactly.',
+                'mismatch': 'Total row count differs.'
+            },
+            {
+                'alias': 'Unique Check',
+                'name': 'unique_check',
+                'logic': 'Verifies all integers in the column are unique.',
+                'match': 'All integers are unique with no duplicates.',
+                'mismatch': 'Non-unique integers are found.'
+            },
+            {
+                'alias': 'Distinct Count',
+                'name': 'distinct_count',
+                'logic': 'Counts distinct integer values.',
+                'match': 'Distinct integer count matches exactly.',
+                'mismatch': 'Distinct integer count differs.'
+            },
+            {
+                'alias': 'Data Type Check',
+                'name': 'data_type_check',
+                'logic': 'Verifies integer data type compatibility (e.g. INT vs BIGINT).',
+                'match': 'Integer data types are compatible.',
+                'mismatch': 'Integer data types differ.'
+            },
+            {
+                'alias': 'Hash Validation',
+                'name': 'hash_validation',
+                'logic': 'Aggregates a hash checksum of integer values.',
+                'match': 'Hash checksum of integers matches exactly.',
+                'mismatch': 'Hash checksum of integers differs.'
+            }
+        ]
+    },
+    'float': {
+        'title': 'Float Operations Documentation',
+        'ops': [
+            {
+                'alias': 'Min Value Check',
+                'name': 'min',
+                'logic': 'Finds the minimum value in the float column.',
+                'match': 'The minimum float value matches exactly between source and target.',
+                'mismatch': 'The minimum float value differs.'
+            },
+            {
+                'alias': 'Max Value Check',
+                'name': 'max',
+                'logic': 'Finds the maximum value in the float column.',
+                'match': 'The maximum float value matches exactly between source and target.',
+                'mismatch': 'The maximum float value differs.'
+            },
+            {
+                'alias': 'Average Check',
+                'name': 'avg',
+                'logic': 'Computes the arithmetic mean of all non-null values in the column.',
+                'match': 'The average float value matches within float precision (e.g. 1e-6).',
+                'mismatch': 'The average float values differ.'
+            },
+            {
+                'alias': 'Sum Check',
+                'name': 'sum',
+                'logic': 'Sums all floating point values in the column.',
+                'match': 'The aggregated sums match within acceptable float tolerance.',
+                'mismatch': 'The float sums differ.'
+            },
+            {
+                'alias': 'Precision Check',
+                'name': 'precision_check',
+                'logic': 'Determine the maximum precision (total number of digits) of the float values in the column.',
+                'match': 'The maximum precision matches between source and target.',
+                'mismatch': 'The maximum precision differs.'
+            },
+            {
+                'alias': 'Scale Check',
+                'name': 'scale_check',
+                'logic': 'Determine the maximum scale (number of digits to the right of the decimal point) of the float.',
+                'match': 'The maximum scale of decimal/float values matches.',
+                'mismatch': 'The maximum scale differs.'
+            },
+            {
+                'alias': 'Duplicate Check',
+                'name': 'duplicate_check',
+                'logic': 'Identifies duplicate float values in the column.',
+                'match': 'The count of duplicate values matches between source and target.',
+                'mismatch': 'The duplicate float counts differ.'
+            },
+            {
+                'alias': 'Null Count',
+                'name': 'null_check',
+                'logic': 'Counts the number of missing (null) values in the float column.',
+                'match': 'The count of missing float values is identical.',
+                'mismatch': 'The count of missing float values differs.'
+            },
+            {
+                'alias': 'Count',
+                'name': 'count',
+                'logic': 'Counts the number of non-null values in the float column.',
+                'match': 'The count of non-null float values matches.',
+                'mismatch': 'The count of non-null float values differs.'
+            },
+            {
+                'alias': 'Row Count Match',
+                'name': 'row_count',
+                'logic': 'Compares the total number of records (including nulls) in the source and target tables.',
+                'match': 'The total row count of both tables is identical.',
+                'mismatch': 'The total row count differs.'
+            },
+            {
+                'alias': 'Unique Check',
+                'name': 'unique_check',
+                'logic': 'Verifies that all values in the float column are unique.',
+                'match': 'All values are unique with zero duplicates.',
+                'mismatch': 'Duplicate float values are detected.'
+            },
+            {
+                'alias': 'Distinct Count',
+                'name': 'distinct_count',
+                'logic': 'Calculates the number of unique non-null values in the column.',
+                'match': 'The count of distinct float values matches.',
+                'mismatch': 'The count of distinct float values differs.'
+            },
+            {
+                'alias': 'Data Type Check',
+                'name': 'data_type_check',
+                'logic': 'Verifies that the column data types are compatible floating point types (e.g. FLOAT vs DOUBLE).',
+                'match': 'Float types are compatible.',
+                'mismatch': 'Float types differ.'
+            }
+        ]
+    },
+    'date': {
+        'title': 'Date Operations Documentation',
+        'ops': [
+            {
+                'alias': 'Min Date',
+                'name': 'min_date',
+                'logic': 'Finds the oldest (minimum) date in the column.',
+                'match': 'Minimum date matches exactly between source and target.',
+                'mismatch': 'Minimum date differs.'
+            },
+            {
+                'alias': 'Max Date',
+                'name': 'max_date',
+                'logic': 'Finds the newest (maximum) date in the column.',
+                'match': 'Maximum date matches exactly between source and target.',
+                'mismatch': 'Maximum date differs.'
+            },
+            {
+                'alias': 'Null Check',
+                'name': 'null_check',
+                'logic': 'Counts missing date values in the column.',
+                'match': 'Missing date count matches exactly between source and target.',
+                'mismatch': 'Missing date count differs.'
+            },
+            {
+                'alias': 'Duplicate Check',
+                'name': 'duplicate_check',
+                'logic': 'Counts duplicate dates.',
+                'match': 'Duplicate date counts are identical between source and target.',
+                'mismatch': 'Duplicate date counts differ.'
+            },
+            {
+                'alias': 'Count',
+                'name': 'count',
+                'logic': 'Counts non-null date values.',
+                'match': 'Non-null date count matches between source and target.',
+                'mismatch': 'Non-null date count differs.'
+            },
+            {
+                'alias': 'Row Count Match',
+                'name': 'row_count',
+                'logic': 'Compares total row counts.',
+                'match': 'Total row count matches exactly.',
+                'mismatch': 'Total row count differs.'
+            },
+            {
+                'alias': 'Unique Check',
+                'name': 'unique_check',
+                'logic': 'Verifies all dates in the column are unique.',
+                'match': 'All date values are unique with zero duplicates.',
+                'mismatch': 'Duplicate dates are present.'
+            },
+            {
+                'alias': 'Distinct Count',
+                'name': 'distinct_count',
+                'logic': 'Counts distinct date values.',
+                'match': 'Distinct date count matches between source and target.',
+                'mismatch': 'Distinct date count differs.'
+            },
+            {
+                'alias': 'Hash Validation',
+                'name': 'hash_validation',
+                'logic': 'Aggregates a hash checksum of date values.',
+                'match': 'Hash checksum of date values matches exactly.',
+                'mismatch': 'Hash checksum of date values differs.'
+            }
+        ]
+    }
+}
+
+@login_required
+def help_documentation_view(request, category='string'):
+    category = category.lower()
+    if category not in HELP_DATA:
+        category = 'string'
+        
+    query = request.GET.get('query', '').strip()
+    
+    selected_category_data = HELP_DATA[category]
+    ops_list = selected_category_data['ops']
+    
+    if query:
+        filtered_ops = []
+        for op in ops_list:
+            if (query.lower() in op['alias'].lower() or
+                query.lower() in op['name'].lower() or
+                query.lower() in op['logic'].lower() or
+                query.lower() in op['match'].lower() or
+                query.lower() in op['mismatch'].lower()):
+                filtered_ops.append(op)
+    else:
+        filtered_ops = ops_list
+
+    context = {
+        'category': category,
+        'title': selected_category_data['title'],
+        'operations': filtered_ops,
+        'query': query
+    }
+    return render(request, 'dashboard/help.html', context)
+

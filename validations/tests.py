@@ -49,16 +49,76 @@ class ValidationWorkspaceEnhancementsTestCase(TestCase):
         self.assertIn('sum', int_ops)
         self.assertIn('avg', int_ops)
         self.assertNotIn('length_sum_check', int_ops)
+        self.assertNotIn('equals', int_ops)
+        self.assertIn('unique_check', int_ops)
+        self.assertIn('distinct_count', int_ops)
+        self.assertIn('data_type_check', int_ops)
 
         str_ops = get_applicable_operations('VARCHAR')
         self.assertIn('length_sum_check', str_ops)
         self.assertIn('regex_check', str_ops)
         self.assertNotIn('sum', str_ops)
+        self.assertNotIn('equals_check', str_ops)
+        self.assertIn('case_insensitive_check', str_ops)
+        self.assertIn('trim_check', str_ops)
+        self.assertIn('contains_check', str_ops)
+        self.assertNotIn('starts_with_check', str_ops)
+        self.assertNotIn('ends_with_check', str_ops)
+        self.assertIn('pattern_match', str_ops)
+        self.assertIn('unique_check', str_ops)
+        self.assertIn('distinct_count', str_ops)
+        self.assertIn('data_type_check', str_ops)
 
         date_ops = get_applicable_operations('DATE')
         self.assertIn('min_date', date_ops)
         self.assertIn('max_date', date_ops)
         self.assertNotIn('sum', date_ops)
+        self.assertIn('unique_check', date_ops)
+        self.assertIn('distinct_count', date_ops)
+
+    def test_new_validation_queries_execution(self):
+        import pandas as pd
+        import tempfile
+        import os
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = os.path.join(tmpdir, "test_data.csv")
+            df = pd.DataFrame({
+                'str_col': [' hello', 'world', 'apple', 'banana', '12345'],
+                'int_col': [10, 20, 30, 40, 50]
+            })
+            df.to_csv(csv_path, index=False)
+            
+            file_conn = DataConnection.objects.create(
+                name='Temp CSV',
+                connection_type='csv',
+                host=tmpdir,
+                created_by=self.user
+            )
+            from connections.connector import ConnectorEngine
+            engine = ConnectorEngine(file_conn)
+            
+            # String checks
+            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'case_insensitive_check'), ' hello')
+            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'trim_check'), 1)
+            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'contains_check'), 1)
+            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'pattern_match'), 5)
+            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'distinct_count'), 5)
+            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'str_col', 'unique_check'), 5)
+            
+            # Numeric checks
+            self.assertEqual(engine.get_aggregation('file', 'test_data.csv', 'int_col', 'count'), 5)
+            
+            # Mock DB checks
+            db_conn = DataConnection.objects.create(
+                name='Temp Mock DB',
+                connection_type='sqlite',
+                host='dummy_mock_host',
+                created_by=self.user
+            )
+            db_engine = ConnectorEngine(db_conn)
+            self.assertEqual(db_engine.get_aggregation('main', 'tbl', 'val', 'unique_check'), 1250)
+            self.assertEqual(db_engine.get_aggregation('main', 'tbl', 'val', 'distinct_count'), 150)
 
     def test_quick_validate_with_all_columns(self):
         # Authenticate client
@@ -274,24 +334,21 @@ class ValidationWorkspaceEnhancementsTestCase(TestCase):
         with self.assertRaises(ValidationError):
             invalid_workflow.full_clean()
 
-    def test_relative_date_resolution_on_run_save(self):
+    def test_calendar_date_resolution_on_run_save(self):
         import datetime
         mapping = Mapping.objects.create(
-            name='Relative Date Map',
+            name='Calendar Date Map',
             source_connection=self.source_conn,
             target_connection=self.target_conn,
             created_by=self.user,
             source_date_column='created_at',
             source_date_filter_type='specific',
-            source_date_value_type='relative',
-            source_date_relative_operator='+',
-            source_date_relative_value=3,
+            source_date_filter_start=datetime.date(2026, 6, 5),
             
             target_date_column='updated_at',
-            target_date_filter_type='specific',
-            target_date_value_type='relative',
-            target_date_relative_operator='-',
-            target_date_relative_value=5
+            target_date_filter_type='range',
+            target_date_filter_start=datetime.date(2026, 6, 1),
+            target_date_filter_end=datetime.date(2026, 6, 10)
         )
         
         run = ValidationRun.objects.create(
@@ -299,11 +356,10 @@ class ValidationWorkspaceEnhancementsTestCase(TestCase):
             triggered_by=self.user
         )
         
-        today = datetime.date.today()
-        self.assertEqual(run.source_date_filter_start, today + datetime.timedelta(days=3))
-        self.assertEqual(run.source_date_filter_end, today + datetime.timedelta(days=3))
-        self.assertEqual(run.target_date_filter_start, today - datetime.timedelta(days=5))
-        self.assertEqual(run.target_date_filter_end, today - datetime.timedelta(days=5))
+        self.assertEqual(run.source_date_filter_start, datetime.date(2026, 6, 5))
+        self.assertEqual(run.source_date_filter_end, datetime.date(2026, 6, 5))
+        self.assertEqual(run.target_date_filter_start, datetime.date(2026, 6, 1))
+        self.assertEqual(run.target_date_filter_end, datetime.date(2026, 6, 10))
 
     def test_date_comparison_operators(self):
         import pandas as pd
@@ -351,4 +407,159 @@ class ValidationWorkspaceEnhancementsTestCase(TestCase):
             
         finally:
             engine.read_file = original_read_file
+
+    def test_pipeline_mapping_edit_view(self):
+        # Authenticate client
+        self.client.login(username='testuser', password='password123')
+        
+        # Create an initial mapping to edit
+        mapping = Mapping.objects.create(
+            name='Initial Pipeline',
+            description='Original description',
+            source_connection=self.source_conn,
+            source_table='customers',
+            target_connection=self.target_conn,
+            target_table='customers',
+            created_by=self.user
+        )
+        col_map = ColumnMapping.objects.create(
+            mapping=mapping,
+            source_column='first_name',
+            source_datatype='VARCHAR',
+            target_column='first_name',
+            target_datatype='VARCHAR'
+        )
+        ValidationRule.objects.create(
+            column_mapping=col_map,
+            operation='null_check'
+        )
+
+        column_mappings_json = json.dumps([
+            {
+                "source_column": "customer_id",
+                "source_datatype": "INTEGER",
+                "target_column": "customer_id",
+                "target_datatype": "INTEGER",
+                "operations": ["sum"]
+            }
+        ])
+
+        response = self.client.post(reverse('mappings:edit', args=[mapping.id]), {
+            'name': 'Updated Pipeline Name ',  # note the extra space to test trimming
+            'description': 'Updated description',
+            'source_connection': self.source_conn.id,
+            'source_schema': 'public',
+            'source_table': 'customers',
+            'target_connection': self.target_conn.id,
+            'target_schema': 'public',
+            'target_table': 'customers',
+            'column_mappings_json': column_mappings_json,
+            'source_date_column': 'created_at',
+            'source_date_filter_type': 'specific',
+            'source_date_single': '2026-06-08',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        
+        # Verify changes in DB
+        mapping.refresh_from_db()
+        self.assertEqual(mapping.name, 'Updated Pipeline Name')  # should be trimmed!
+        self.assertEqual(mapping.description, 'Updated description')
+        self.assertEqual(mapping.source_date_column, 'created_at')
+        self.assertEqual(mapping.source_date_filter_type, 'specific')
+        self.assertEqual(str(mapping.source_date_filter_start), '2026-06-08')
+
+        # Check that old column mapping/rule was deleted and new one was created
+        col_mappings = mapping.column_mappings.all()
+        self.assertEqual(col_mappings.count(), 1)
+        new_col_map = col_mappings.first()
+        self.assertEqual(new_col_map.source_column, 'customer_id')
+        self.assertEqual(new_col_map.rules.count(), 1)
+        self.assertEqual(new_col_map.rules.first().operation, 'sum')
+
+    def test_validation_engine_enhancements(self):
+        # Test refactored engine validation checks
+        import tempfile
+        import os
+        import pandas as pd
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            src_csv = os.path.join(tmpdir, "source.csv")
+            tgt_csv = os.path.join(tmpdir, "target.csv")
+            
+            df_src = pd.DataFrame({'col': ['Active ', 'inactive', 'pending']})
+            df_tgt = pd.DataFrame({'col': ['active', 'inactive', 'pending']})
+            df_src.to_csv(src_csv, index=False)
+            df_tgt.to_csv(tgt_csv, index=False)
+            
+            src_conn = DataConnection.objects.create(
+                name='Src File', connection_type='csv', host=tmpdir, created_by=self.user
+            )
+            tgt_conn = DataConnection.objects.create(
+                name='Tgt File', connection_type='csv', host=tmpdir, created_by=self.user
+            )
+            
+            mapping = Mapping.objects.create(
+                name='Test Refactor Mapping',
+                source_connection=src_conn,
+                source_table='source.csv',
+                target_connection=tgt_conn,
+                target_table='target.csv',
+                created_by=self.user
+            )
+            
+            col_map = ColumnMapping.objects.create(
+                mapping=mapping,
+                source_column='col',
+                source_datatype='VARCHAR',
+                target_column='col',
+                target_datatype='VARCHAR'
+            )
+            
+            run = ValidationRun.objects.create(
+                mapping=mapping,
+                triggered_by=self.user,
+                trigger_type='manual',
+                parameters={
+                    'col:contains_check': 'pen',
+                    'col:pattern_match': '^[a-zA-Z\\s]+$',
+                }
+            )
+            
+            from validations.engine import ValidationEngine
+            engine = ValidationEngine(run)
+            
+            # Test case_insensitive_check
+            res = engine._run_check(col_map, 'case_insensitive_check')
+            self.assertFalse(res.is_match)
+            self.assertEqual(res.source_value, 'false')
+            self.assertIn("Mismatch at row 1", res.difference)
+            
+            # Test trim_check
+            res_trim = engine._run_check(col_map, 'trim_check')
+            self.assertEqual(res_trim.source_value, 'Found')
+            self.assertEqual(res_trim.target_value, 'Not Found')
+            self.assertFalse(res_trim.is_match)
+            
+            # Test contains_check
+            res_contains = engine._run_check(col_map, 'contains_check')
+            self.assertFalse(res_contains.is_match)
+            self.assertEqual(res_contains.source_value, 'false')
+            self.assertIn("Row 1 failed check", res_contains.difference)
+            
+            # Test pattern_match with matching regex
+            res_pat_match = engine._run_check(col_map, 'pattern_match')
+            self.assertTrue(res_pat_match.is_match)
+            
+            # Test pattern_match with non-matching regex
+            run.parameters['col:pattern_match'] = '^[a-z]+$'
+            run.save()
+            res_pat_mismatch = engine._run_check(col_map, 'pattern_match')
+            self.assertFalse(res_pat_mismatch.is_match)
+            self.assertIn("Pattern mismatch at row 1: source failed regex check", res_pat_mismatch.difference)
+            
+            # Test sum_length returns integers
+            res_len = engine._run_check(col_map, 'sum_length')
+            self.assertEqual(res_len.source_value, '22')
+            self.assertEqual(res_len.target_value, '21')
 

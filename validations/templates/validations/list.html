@@ -7,12 +7,29 @@
 <div class="card">
     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
         <h2><i class="fas fa-check-double" style="color: var(--primary); margin-right: 8px;"></i> Recent Monitor Runs</h2>
-        <form method="get" action="" style="display: flex; gap: 8px; align-items: center; margin: 0;">
-            <input type="text" name="query" class="form-control" placeholder="Search pipeline name..." value="{{ query|default:'' }}" style="width: 240px; height: 38px; border-radius: 6px; margin: 0;">
+        <form method="get" action="" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0;">
+            <input type="text" name="query" class="form-control" placeholder="Search pipeline name..." value="{{ query|default:'' }}" style="width: 200px; height: 38px; border-radius: 6px; margin: 0;">
+            
+            <select name="status" class="form-control" onchange="this.form.submit()" style="width: 140px; height: 38px; border-radius: 6px; margin: 0;">
+                <option value="">-- Status --</option>
+                <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+                <option value="running" {% if status_filter == 'running' %}selected{% endif %}>In Progress</option>
+                <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
+                <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+            </select>
+            
+            <select name="type" class="form-control" onchange="this.form.submit()" style="width: 140px; height: 38px; border-radius: 6px; margin: 0;">
+                <option value="">-- Type --</option>
+                <option value="manual" {% if type_filter == 'manual' %}selected{% endif %}>Manual</option>
+                <option value="scheduled" {% if type_filter == 'scheduled' %}selected{% endif %}>DB Trigger</option>
+            </select>
+            
+            <input type="date" name="date" class="form-control" onchange="this.form.submit()" value="{{ date_filter }}" style="width: 150px; height: 38px; border-radius: 6px; margin: 0;">
+            
             <button type="submit" class="btn btn-primary" style="height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; padding: 0 16px; font-size: 14px; font-weight: 500; cursor: pointer;">
                 <i class="fas fa-search" style="margin-right: 6px;"></i> Search
             </button>
-            {% if query %}
+            {% if query or status_filter or type_filter or date_filter %}
             <a href="?" class="btn btn-secondary" style="height: 38px; display: inline-flex; align-items: center; justify-content: center; background: #fff; border: 1px solid #CBD5E1; color: #1E293B; border-radius: 6px; padding: 0 16px; font-weight: 500; font-size: 14px; text-decoration: none;">Clear</a>
             {% endif %}
         </form>
@@ -22,7 +39,7 @@
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Run #</th>
+                        <th>No.</th>
                         <th>Pipeline</th>
                         <th>Status</th>
                         <th>Progress</th>
@@ -36,7 +53,7 @@
                 <tbody>
                     {% for run in runs %}
                     <tr>
-                        <td class="fw-600">#{{ run.id }}</td>
+                        <td class="fw-600">{{ run.id }}</td>
                         <td>{{ run.mapping.name }}</td>
                         <td>
                             <span class="badge badge-dot {% if run.status == 'completed' %}badge-success{% elif run.status == 'failed' %}badge-danger{% elif run.status == 'running' %}badge-warning{% else %}badge-muted{% endif %}"
@@ -54,7 +71,13 @@
                             <span class="text-danger fw-600">{{ run.failed_checks }}</span>
                             <span class="text-muted">({{ run.total_checks }})</span>
                         </td>
-                        <td>{{ run.triggered_by.get_full_name|default:run.triggered_by.username|default:"-" }}</td>
+                        <td>
+                            {% if run.triggered_by %}
+                                {{ run.triggered_by.get_full_name|default:run.triggered_by.username }}
+                            {% else %}
+                                System
+                            {% endif %}
+                        </td>
                         <td>
                             <span class="badge {% if run.trigger_type == 'manual' %}badge-info{% else %}badge-primary{% endif %}">
                                 {{ run.get_trigger_type_display }}
@@ -62,7 +85,7 @@
                         </td>
                         <td>{{ run.created_at|date:"d M Y H:i" }}</td>
                         <td>
-                            <div class="d-flex gap-8">
+                            <div class="d-flex gap-8" style="align-items: center;">
                                 {% if run.status == 'completed' or run.status == 'failed' %}
                                 <a href="{% url 'validations:report' run.id %}" class="btn btn-sm btn-secondary">
                                     <i class="fas fa-file-alt"></i> Report
@@ -71,6 +94,14 @@
                                 <a href="{% url 'validations:progress' run.id %}" class="btn btn-sm btn-warning">
                                     <i class="fas fa-spinner fa-spin"></i> Progress
                                 </a>
+                                {% endif %}
+                                {% if user_profile.role != 'auditor' %}
+                                <form method="post" action="{% url 'validations:delete' run.id %}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete Validation Run {{ run.id }}?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-danger" style="background-color: var(--danger); border-color: var(--danger); color: white; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                </form>
                                 {% endif %}
                             </div>
                         </td>

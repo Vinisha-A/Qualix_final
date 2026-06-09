@@ -37,7 +37,7 @@ def run_validation_task(self, run_id):
                 status_text = "Passed" if run.failed_checks == 0 else "Failed"
                 Notification.objects.create(
                     user=run.triggered_by,
-                    title=f"Validation Run #{run.id} Completed",
+                    title=f"Validation Run {run.id} Completed",
                     message=f"Pipeline: {run.mapping.name}\nStatus: {status_text} ({run.passed_checks}/{run.total_checks} checks passed)",
                     level='success' if run.failed_checks == 0 else 'warning'
                 )
@@ -57,7 +57,7 @@ def run_validation_task(self, run_id):
                 from dashboard.models import Notification
                 Notification.objects.create(
                     user=run.triggered_by,
-                    title=f"Validation Run #{run.id} Failed",
+                    title=f"Validation Run {run.id} Failed",
                     message=f"Pipeline: {run.mapping.name}\nError: {exc}",
                     level='error'
                 )

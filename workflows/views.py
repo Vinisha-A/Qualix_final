@@ -225,7 +225,7 @@ def api_trigger_workflow(request, workflow_id):
                 Notification.objects.create(
                     user=workflow.created_by,
                     title=f"Workflow '{workflow.name}' Completed",
-                    message=f"Validation Run #{run.id} finished.\nStatus: {status_text} ({run.passed_checks}/{run.total_checks} checks passed)",
+                    message=f"Validation Run {run.id} finished.\nStatus: {status_text} ({run.passed_checks}/{run.total_checks} checks passed)",
                     level='success' if run.failed_checks == 0 else 'warning'
                 )
         except Exception as e:

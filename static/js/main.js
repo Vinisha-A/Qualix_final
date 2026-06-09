@@ -345,6 +345,45 @@ function loadColumns(connId, schema, table, prefix) {
                 const checklistContainer = document.getElementById(`${prefix}-columns-checkboxes-list`);
                 if (checklistContainer) {
                     checklistContainer.innerHTML = '';
+                    
+                    // Add Search Input if not exists
+                    let searchInput = document.getElementById(`${prefix}-columns-search-input`);
+                    if (!searchInput) {
+                        searchInput = document.createElement('input');
+                        searchInput.type = 'text';
+                        searchInput.id = `${prefix}-columns-search-input`;
+                        searchInput.placeholder = `Search ${prefix} columns...`;
+                        searchInput.className = 'form-control form-control-sm';
+                        searchInput.style.marginBottom = '8px';
+                        searchInput.style.padding = '6px 10px';
+                        searchInput.style.fontSize = '0.85rem';
+                        searchInput.style.borderRadius = 'var(--radius-sm)';
+                        searchInput.style.border = '1px solid var(--border-medium)';
+                        searchInput.style.backgroundColor = 'var(--bg-input)';
+                        searchInput.style.color = 'var(--text-primary)';
+                        
+                        // Insert search input right before the checklist container
+                        checklistContainer.parentNode.insertBefore(searchInput, checklistContainer);
+                        
+                        // Add filter event listener
+                        searchInput.addEventListener('input', function() {
+                            const query = this.value.toLowerCase();
+                            const items = checklistContainer.querySelectorAll(`.${prefix}-column-list-item`);
+                            items.forEach(item => {
+                                const colName = item.querySelector('input').value.toLowerCase();
+                                if (colName.includes(query)) {
+                                    item.style.display = 'flex';
+                                } else {
+                                    item.style.display = 'none';
+                                }
+                            });
+                        });
+                    }
+                    
+                    // Make sure search input is visible and reset
+                    searchInput.style.display = 'block';
+                    searchInput.value = '';
+
                     data.columns.forEach(col => {
                         const div = document.createElement('div');
                         div.className = `${prefix}-column-list-item`;
@@ -453,6 +492,11 @@ function clearColumnList(prefix) {
     if (checklist) {
         checklist.innerHTML = '';
     }
+    const searchInput = document.getElementById(`${prefix}-columns-search-input`);
+    if (searchInput) {
+        searchInput.style.display = 'none';
+        searchInput.value = '';
+    }
     if (typeof checkTableSelections === 'function') {
         checkTableSelections();
     }
@@ -499,20 +543,44 @@ function pollValidationProgress(runId) {
 function triggerValidation(mappingId) {
     if (!confirm('Are you sure you want to trigger this validation?')) return;
 
-    fetchWithCSRF(`/validations/api/trigger/${mappingId}/`, { method: 'POST' })
+    // First fetch if any parameter-based rules are active
+    fetch(`/validations/api/mapping/${mappingId}/rules-metadata/`)
         .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                showToast('Validation triggered successfully!', 'success');
-                if (data.run_id) {
-                    pollValidationProgress(data.run_id);
+        .then(meta => {
+            let parameters = {};
+            if (meta.requires_parameters) {
+                for (const rule of meta.rules) {
+                    let promptMsg = `Enter input parameter for column "${rule.column}" (${rule.operation_display}):`;
+                    let userInput = prompt(promptMsg);
+                    if (userInput === null) {
+                        // User cancelled the prompt
+                        showToast('Validation run cancelled.', 'warning');
+                        return;
+                    }
+                    parameters[`${rule.column}:${rule.operation}`] = userInput;
                 }
-                setTimeout(() => location.reload(), 1000);
-            } else {
-                showToast(data.error || 'Failed to trigger validation', 'error');
             }
+
+            // Trigger validation via POST sending the parameters
+            fetchWithCSRF(`/validations/api/trigger/${mappingId}/`, {
+                method: 'POST',
+                body: JSON.stringify({ parameters: parameters })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Validation triggered successfully!', 'success');
+                    if (data.run_id) {
+                        pollValidationProgress(data.run_id);
+                    }
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showToast(data.error || 'Failed to trigger validation', 'error');
+                }
+            })
+            .catch(() => showToast('Network error', 'error'));
         })
-        .catch(() => showToast('Network error', 'error'));
+        .catch(() => showToast('Failed to check validation rules metadata', 'error'));
 }
 
 // ─── Trigger Workflow ───────────────────────────────────────────────────────
@@ -927,7 +995,7 @@ async function restoreMappingDraft(data) {
                             const selectAllRadio = document.getElementById('all-ops-select-all');
                             const deselectAllRadio = document.getElementById('all-ops-deselect-all');
                             if (selectAllRadio && deselectAllRadio) {
-                                selectAllRadio.checked = (ops.length === 10);
+                                selectAllRadio.checked = (ops.length === 19);
                                 deselectAllRadio.checked = (ops.length === 0);
                             }
                         }, 200);
@@ -958,6 +1026,13 @@ async function restoreMappingDraft(data) {
                 toggleDateFilterInputs(prefix, filterType);
             }
 
+            const includeTimestampCb = document.getElementById(`${prefix}-include-timestamp`);
+            if (includeTimestampCb) {
+                const isTimestamp = dateSingle.includes('T') || filterStart.includes('T') || dateSingle.includes(':') || filterStart.includes(':');
+                includeTimestampCb.checked = isTimestamp;
+                toggleTimeFormat(prefix);
+            }
+
             const singleInput = document.getElementById(`${prefix}-date-single`);
             if (singleInput) {
                 singleInput.value = dateSingle;
@@ -966,6 +1041,16 @@ async function restoreMappingDraft(data) {
             const startInput = document.getElementById(`${prefix}-date-filter-start`);
             if (startInput) {
                 startInput.value = filterStart;
+            }
+
+            const startOpSelect = document.getElementById(`${prefix}-date-range-operator-start`);
+            if (startOpSelect) {
+                startOpSelect.value = data[`${prefix}_date_range_operator_start`] || '>=';
+            }
+
+            const endOpSelect = document.getElementById(`${prefix}-date-range-operator-end`);
+            if (endOpSelect) {
+                endOpSelect.value = data[`${prefix}_date_range_operator_end`] || '<=';
             }
 
             const endInput = document.getElementById(`${prefix}-date-filter-end`);
@@ -1049,7 +1134,17 @@ const OP_LISTS = {
         { value: 'null_check', label: 'Null Check' },
         { value: 'length_sum_check', label: 'Length Check' },
         { value: 'sum_length', label: 'Sum Length' },
-        { value: 'duplicate_check', label: 'Duplicate Check' }
+        { value: 'duplicate_check', label: 'Duplicate Check' },
+        { value: 'case_insensitive_check', label: 'Case Insensitive Check' },
+        { value: 'trim_check', label: 'Trim Check' },
+        { value: 'contains_check', label: 'Contains Check' },
+        { value: 'pattern_match', label: 'Pattern Match' },
+        { value: 'count', label: 'Count' },
+        { value: 'row_count', label: 'Row Count Match' },
+        { value: 'unique_check', label: 'Unique Check' },
+        { value: 'distinct_count', label: 'Distinct Count' },
+        { value: 'data_type_check', label: 'Data Type Check' },
+        { value: 'hash_validation', label: 'Hash Validation' }
     ],
     INTEGER: [
         { value: 'null_check', label: 'Null Check' },
@@ -1057,13 +1152,33 @@ const OP_LISTS = {
         { value: 'avg', label: 'Average' },
         { value: 'min', label: 'Min' },
         { value: 'max', label: 'Max' },
-        { value: 'duplicate_check', label: 'Duplicate Check' }
+        { value: 'duplicate_check', label: 'Duplicate Check' },
+        { value: 'count', label: 'Count' },
+        { value: 'row_count', label: 'Row Count Match' },
+        { value: 'unique_check', label: 'Unique Check' },
+        { value: 'distinct_count', label: 'Distinct Count' },
+        { value: 'data_type_check', label: 'Data Type Check' },
+        { value: 'hash_validation', label: 'Hash Validation' }
     ],
     DATE: [
         { value: 'null_check', label: 'Null Check' },
         { value: 'min_date', label: 'Min Date' },
         { value: 'max_date', label: 'Max Date' },
-        { value: 'duplicate_check', label: 'Duplicate Check' }
+        { value: 'duplicate_check', label: 'Duplicate Check' },
+        { value: 'count', label: 'Count' },
+        { value: 'row_count', label: 'Row Count Match' },
+        { value: 'unique_check', label: 'Unique Check' },
+        { value: 'distinct_count', label: 'Distinct Count' },
+        { value: 'hash_validation', label: 'Hash Validation' }
+    ],
+    BOOLEAN: [
+        { value: 'null_check', label: 'Null Check' },
+        { value: 'duplicate_check', label: 'Duplicate Check' },
+        { value: 'count', label: 'Count' },
+        { value: 'row_count', label: 'Row Count Match' },
+        { value: 'unique_check', label: 'Unique Check' },
+        { value: 'distinct_count', label: 'Distinct Count' },
+        { value: 'hash_validation', label: 'Hash Validation' }
     ]
 };
 
@@ -1094,6 +1209,8 @@ function categorizeDatatype(typeStr, nameStr = '') {
         return 'INTEGER';
     } else if (t.includes('DATE') || t.includes('TIME') || t.includes('TIMESTAMP') || n.includes('DATE') || n.includes('TIME') || n.includes('TIMESTAMP') || n.includes('DATETIME')) {
         return 'DATE';
+    } else if (t.includes('BOOL') || t.includes('BOOLEAN')) {
+        return 'BOOLEAN';
     }
     return 'VARCHAR';
 }
@@ -1261,7 +1378,16 @@ function handleColumnSelectionChange() {
             { value: 'max', label: 'Max' },
             { value: 'min_date', label: 'Min Date' },
             { value: 'max_date', label: 'Max Date' },
-            { value: 'data_type_check', label: 'Data Type Check' }
+            { value: 'count', label: 'Count' },
+            { value: 'row_count', label: 'Row Count Match' },
+            { value: 'unique_check', label: 'Unique Check' },
+            { value: 'distinct_count', label: 'Distinct Count' },
+            { value: 'data_type_check', label: 'Data Type Check' },
+            { value: 'case_insensitive_check', label: 'Case Insensitive Check' },
+            { value: 'trim_check', label: 'Trim Check' },
+            { value: 'contains_check', label: 'Contains Check' },
+            { value: 'pattern_match', label: 'Pattern Match' },
+            { value: 'hash_validation', label: 'Hash Validation' }
         ];
 
         let html = `
@@ -1598,6 +1724,18 @@ function toggleDateFilterInputs(prefix, type) {
             rangeWrapper.style.display = 'none';
         }
     }
+}
+
+function toggleTimeFormat(prefix) {
+    const includeTimestamp = document.getElementById(`${prefix}-include-timestamp`).checked;
+    const dateSingle = document.getElementById(`${prefix}-date-single`);
+    const dateStart = document.getElementById(`${prefix}-date-filter-start`);
+    const dateEnd = document.getElementById(`${prefix}-date-filter-end`);
+    
+    const inputType = includeTimestamp ? 'datetime-local' : 'date';
+    if (dateSingle) dateSingle.type = inputType;
+    if (dateStart) dateStart.type = inputType;
+    if (dateEnd) dateEnd.type = inputType;
 }
 
 function toggleDateValueType(prefix, valType) {

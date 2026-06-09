@@ -12,6 +12,9 @@
             <button class="btn btn-primary btn-sm" onclick="triggerValidation({{ mapping.id }})">
                 <i class="fas fa-play"></i> Run Monitor
             </button>
+            <a href="{% url 'mappings:edit' mapping.id %}" class="btn btn-outline btn-sm">
+                <i class="fas fa-edit"></i> Edit
+            </a>
             <form method="post" action="{% url 'mappings:delete' mapping.id %}" style="display:inline;">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-outline btn-sm" onclick="return confirm('Delete this pipeline?')">

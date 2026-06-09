@@ -44,7 +44,7 @@ def execute_workflow_task(self, workflow_id, trigger_source='scheduled'):
         workflow.last_run = timezone.now()
         workflow.save(update_fields=['last_run'])
 
-        logger.info(f"Workflow '{workflow.name}' executed successfully. Run #{run.id}")
+        logger.info(f"Workflow '{workflow.name}' executed successfully. Run {run.id}")
 
         if workflow.created_by:
             try:
@@ -53,7 +53,7 @@ def execute_workflow_task(self, workflow_id, trigger_source='scheduled'):
                 Notification.objects.create(
                     user=workflow.created_by,
                     title=f"Workflow '{workflow.name}' Completed",
-                    message=f"Validation Run #{run.id} finished.\nStatus: {status_text} ({run.passed_checks}/{run.total_checks} checks passed)",
+                    message=f"Validation Run {run.id} finished.\nStatus: {status_text} ({run.passed_checks}/{run.total_checks} checks passed)",
                     level='success' if run.failed_checks == 0 else 'warning'
                 )
             except Exception:

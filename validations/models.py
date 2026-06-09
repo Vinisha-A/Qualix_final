@@ -28,14 +28,14 @@ class ValidationRun(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
 
     # Date filter values used for this run
-    date_filter_start = models.DateField(null=True, blank=True)
-    date_filter_end = models.DateField(null=True, blank=True)
+    date_filter_start = models.CharField(max_length=50, null=True, blank=True)
+    date_filter_end = models.CharField(max_length=50, null=True, blank=True)
 
     # Separate Date filter values
-    source_date_filter_start = models.DateField(null=True, blank=True)
-    source_date_filter_end = models.DateField(null=True, blank=True)
-    target_date_filter_start = models.DateField(null=True, blank=True)
-    target_date_filter_end = models.DateField(null=True, blank=True)
+    source_date_filter_start = models.CharField(max_length=50, null=True, blank=True)
+    source_date_filter_end = models.CharField(max_length=50, null=True, blank=True)
+    target_date_filter_start = models.CharField(max_length=50, null=True, blank=True)
+    target_date_filter_end = models.CharField(max_length=50, null=True, blank=True)
     selected_columns = models.TextField(blank=True, help_text='Comma-separated columns validated in this run.')
 
     total_checks = models.IntegerField(default=0)
@@ -43,6 +43,7 @@ class ValidationRun(models.Model):
     failed_checks = models.IntegerField(default=0)
 
     error_message = models.TextField(blank=True)
+    parameters = models.JSONField(default=dict, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -51,24 +52,10 @@ class ValidationRun(models.Model):
         if is_new:
             # Resolve source dates
             if self.mapping.source_date_filter_type == 'specific':
-                if self.mapping.source_date_value_type == 'relative':
-                    import datetime
-                    try:
-                        days = int(self.mapping.source_date_relative_value or 0)
-                    except (ValueError, TypeError):
-                        days = 0
-                    today = datetime.date.today()
-                    if self.mapping.source_date_relative_operator == '-':
-                        resolved = today - datetime.timedelta(days=days)
-                    else:
-                        resolved = today + datetime.timedelta(days=days)
-                    self.source_date_filter_start = resolved
-                    self.source_date_filter_end = resolved
-                else:
-                    if not self.source_date_filter_start:
-                        self.source_date_filter_start = self.mapping.source_date_filter_start
-                    if not self.source_date_filter_end:
-                        self.source_date_filter_end = self.mapping.source_date_filter_end
+                if not self.source_date_filter_start:
+                    self.source_date_filter_start = self.mapping.source_date_filter_start
+                if not self.source_date_filter_end:
+                    self.source_date_filter_end = self.mapping.source_date_filter_start
             elif self.mapping.source_date_filter_type == 'range':
                 if not self.source_date_filter_start:
                     self.source_date_filter_start = self.mapping.source_date_filter_start
@@ -77,24 +64,10 @@ class ValidationRun(models.Model):
 
             # Resolve target dates
             if self.mapping.target_date_filter_type == 'specific':
-                if self.mapping.target_date_value_type == 'relative':
-                    import datetime
-                    try:
-                        days = int(self.mapping.target_date_relative_value or 0)
-                    except (ValueError, TypeError):
-                        days = 0
-                    today = datetime.date.today()
-                    if self.mapping.target_date_relative_operator == '-':
-                        resolved = today - datetime.timedelta(days=days)
-                    else:
-                        resolved = today + datetime.timedelta(days=days)
-                    self.target_date_filter_start = resolved
-                    self.target_date_filter_end = resolved
-                else:
-                    if not self.target_date_filter_start:
-                        self.target_date_filter_start = self.mapping.target_date_filter_start
-                    if not self.target_date_filter_end:
-                        self.target_date_filter_end = self.mapping.target_date_filter_end
+                if not self.target_date_filter_start:
+                    self.target_date_filter_start = self.mapping.target_date_filter_start
+                if not self.target_date_filter_end:
+                    self.target_date_filter_end = self.mapping.target_date_filter_start
             elif self.mapping.target_date_filter_type == 'range':
                 if not self.target_date_filter_start:
                     self.target_date_filter_start = self.mapping.target_date_filter_start
@@ -103,24 +76,10 @@ class ValidationRun(models.Model):
 
             # Resolve common date filters
             if self.mapping.date_filter_type == 'specific':
-                if self.mapping.date_value_type == 'relative':
-                    import datetime
-                    try:
-                        days = int(self.mapping.date_relative_value or 0)
-                    except (ValueError, TypeError):
-                        days = 0
-                    today = datetime.date.today()
-                    if self.mapping.date_relative_operator == '-':
-                        resolved = today - datetime.timedelta(days=days)
-                    else:
-                        resolved = today + datetime.timedelta(days=days)
-                    self.date_filter_start = resolved
-                    self.date_filter_end = resolved
-                else:
-                    if not self.date_filter_start:
-                        self.date_filter_start = self.mapping.date_filter_start
-                    if not self.date_filter_end:
-                        self.date_filter_end = self.mapping.date_filter_end
+                if not self.date_filter_start:
+                    self.date_filter_start = self.mapping.date_filter_start
+                if not self.date_filter_end:
+                    self.date_filter_end = self.mapping.date_filter_start
             elif self.mapping.date_filter_type == 'range':
                 if not self.date_filter_start:
                     self.date_filter_start = self.mapping.date_filter_start
@@ -133,7 +92,7 @@ class ValidationRun(models.Model):
         verbose_name = 'Validation Run'
 
     def __str__(self):
-        return f"Run #{self.id} - {self.mapping.name} ({self.status})"
+        return f"Run {self.id} - {self.mapping.name} ({self.status})"
 
     @property
     def pass_rate(self):

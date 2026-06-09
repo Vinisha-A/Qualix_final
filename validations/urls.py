@@ -9,7 +9,9 @@ urlpatterns = [
     path('progress/<int:run_id>/', views.validation_progress_view, name='progress'),
     path('export/<int:run_id>/', views.export_report, name='export'),
     path('quick/', views.quick_validate_view, name='quick'),
+    path('delete/<int:run_id>/', views.validation_delete_view, name='delete'),
     # API
     path('api/progress/<int:run_id>/', views.api_validation_progress, name='api_progress'),
     path('api/trigger/<int:mapping_id>/', views.api_trigger_validation, name='api_trigger'),
+    path('api/mapping/<int:mapping_id>/rules-metadata/', views.api_mapping_rules_metadata, name='api_mapping_rules_metadata'),
 ]

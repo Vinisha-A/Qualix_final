@@ -2,9 +2,8 @@
 Django>=4.2,<5.0
 django-extensions>=3.2
 
-# Authentication - LDAP / Active Directory
-django-auth-ldap>=4.6
-python-ldap>=3.4
+# django-auth-ldap>=4.6
+# python-ldap>=3.4
 
 # Async Task Queue
 celery[redis]>=5.3

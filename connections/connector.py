@@ -17,6 +17,37 @@ class ConnectorEngine:
     def __init__(self, connection):
         self.connection = connection
 
+    def _quote_identifier(self, name):
+        """Quote identifier according to database connection type."""
+        if not name:
+            return ""
+        if self.connection.connection_type in ('mysql', 'databricks'):
+            return f"`{name}`"
+        else:
+            return f'"{name}"'
+
+    def _pattern_match_sql(self, q_col):
+        t = str(self.connection.connection_type).lower()
+        if t == 'postgresql':
+            return f"SUM(CASE WHEN {q_col} ~ '^[A-Za-z0-9_\\-\\.\\s@]+$' THEN 1 ELSE 0 END)"
+        elif t == 'mysql':
+            return f"SUM(CASE WHEN {q_col} REGEXP '^[A-Za-z0-9_\\-\\.\\s@]+$' THEN 1 ELSE 0 END)"
+        elif t == 'sqlite':
+            return f"SUM(CASE WHEN {q_col} GLOB '*[A-Za-z0-9_]*' THEN 1 ELSE 0 END)"
+        else:
+            return f"SUM(CASE WHEN {q_col} IS NOT NULL AND {q_col} != '' THEN 1 ELSE 0 END)"
+
+    def _hash_validation_sql(self, q_col):
+        t = str(self.connection.connection_type).lower()
+        if t == 'postgresql':
+            return f"MD5(CAST(SUM(hashtext(CAST({q_col} AS TEXT))) AS TEXT))"
+        elif t == 'mysql':
+            return f"MD5(CAST(SUM(CRC32(CAST({q_col} AS CHAR))) AS CHAR))"
+        elif t == 'sqlite':
+            return f"CAST(SUM(LENGTH(COALESCE(CAST({q_col} AS TEXT), ''))) AS TEXT)"
+        else:
+            return f"CAST(SUM(LENGTH(COALESCE(CAST({q_col} AS VARCHAR), ''))) AS VARCHAR)"
+
     def get_engine(self):
         """Create and return a SQLAlchemy engine."""
         conn_string = self.connection.get_connection_string()
@@ -29,7 +60,7 @@ class ConnectorEngine:
         if self.connection.is_file:
             return False
         host = getattr(self.connection, 'host', '') or ''
-        if 'dummy' in host.lower() or 'mock' in host.lower() or 'test' in host.lower():
+        if 'dummy' in host.lower() or 'mock' in host.lower():
             return True
         try:
             self.get_engine()
@@ -73,6 +104,24 @@ class ConnectorEngine:
             return 1250
         elif op_lower == 'range_check':
             return 1250
+        elif op_lower == 'equals_check':
+            return 'mock_value'
+        elif op_lower == 'case_insensitive_check':
+            return 'mock_value'
+        elif op_lower == 'trim_check':
+            return 0
+        elif op_lower == 'contains_check':
+            return 0
+        elif op_lower == 'starts_with_check':
+            return 0
+        elif op_lower == 'ends_with_check':
+            return 0
+        elif op_lower == 'pattern_match':
+            return 0
+        elif op_lower == 'equals':
+            return 75000
+        elif op_lower == 'hash_validation':
+            return 'mock_hash_value_12345'
         return 1250
 
     def test_connection(self):
@@ -336,7 +385,96 @@ class ConnectorEngine:
             logger.error(f"Query execution error: {e}")
             raise
 
-    def get_aggregation(self, schema, table, column, operation, date_column=None, date_start=None, date_end=None, date_operator=None):
+    def get_column_values(self, schema, table, column, date_column=None, date_start=None, date_end=None, date_operator=None, date_operator_start='>=', date_operator_end='<='):
+        """Fetch all values for a column as a list, applying date filters."""
+        if self.is_mocked():
+            col_lower = column.lower()
+            if col_lower in ('status', 'hwm_flag', 'active_flag'):
+                return ['active', 'active', 'active', 'active', 'active']
+            if col_lower == 'first_name':
+                return ['Alice', 'Bob', 'Charlie', 'David', 'Eva']
+            if col_lower == 'str_col':
+                return [' hello', 'world', 'apple', 'banana', '12345']
+            return ['mock_val1', 'mock_val2', 'mock_val3', 'mock_val4', 'mock_val5']
+        
+        if self.connection.is_file:
+            df = self.read_file(table=table)
+            if df is None or column not in df.columns:
+                return []
+            
+            if date_column and date_column in df.columns:
+                if date_operator:
+                    df_date = pd.to_datetime(df[date_column])
+                    ref_date = pd.to_datetime(date_start)
+                    if date_operator == '=':
+                        df = df[df_date == ref_date]
+                    elif date_operator == '>':
+                        df = df[df_date > ref_date]
+                    elif date_operator == '<':
+                        df = df[df_date < ref_date]
+                    elif date_operator == '>=':
+                        df = df[df_date >= ref_date]
+                    elif date_operator == '<=':
+                        df = df[df_date <= ref_date]
+                else:
+                    df_date = pd.to_datetime(df[date_column])
+                    if date_start:
+                        ref_start = pd.to_datetime(date_start)
+                        if date_operator_start == '>':
+                            df = df[df_date > ref_start]
+                        elif date_operator_start == '<':
+                            df = df[df_date < ref_start]
+                        elif date_operator_start == '>=':
+                            df = df[df_date >= ref_start]
+                        elif date_operator_start == '<=':
+                            df = df[df_date <= ref_start]
+                    if date_end:
+                        ref_end = pd.to_datetime(date_end)
+                        if date_operator_end == '>':
+                            df = df[df_date > ref_end]
+                        elif date_operator_end == '<':
+                            df = df[df_date < ref_end]
+                        elif date_operator_end == '>=':
+                            df = df[df_date >= ref_end]
+                        elif date_operator_end == '<=':
+                            df = df[df_date <= ref_end]
+            return df[column].dropna().tolist()
+
+        # Database
+        q_col = self._quote_identifier(column)
+        q_schema = self._quote_identifier(schema) if schema and schema != 'file' else None
+        q_table = self._quote_identifier(table)
+        full_table = f"{q_schema}.{q_table}" if q_schema else q_table
+        
+        query = f"SELECT {q_col} FROM {full_table}"
+        conditions = []
+        if date_column:
+            q_date_col = self._quote_identifier(date_column)
+            if date_operator:
+                conditions.append(f'{q_date_col} {date_operator} :date_start')
+            else:
+                if date_start:
+                    conditions.append(f'{q_date_col} {date_operator_start} :date_start')
+                if date_end:
+                    conditions.append(f'{q_date_col} {date_operator_end} :date_end')
+        
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+            
+        params = {}
+        if date_start:
+            params['date_start'] = date_start
+        if not date_operator and date_end:
+            params['date_end'] = date_end
+            
+        try:
+            df = self.execute_query(query, params)
+            return df[column].dropna().tolist() if not df.empty else []
+        except Exception as e:
+            logger.error(f"Error fetching column values: {e}")
+            return []
+
+    def get_aggregation(self, schema, table, column, operation, date_column=None, date_start=None, date_end=None, date_operator=None, date_operator_start='>=', date_operator_end='<='):
         """Execute an aggregation query on a specific column."""
         if operation == 'data_type_check':
             cols = self.get_columns(schema, table)
@@ -349,41 +487,55 @@ class ConnectorEngine:
             return self._mock_aggregation(column, operation)
 
         if self.connection.is_file:
-            return self._file_aggregation(table, column, operation, date_column, date_start, date_end, date_operator)
+            return self._file_aggregation(table, column, operation, date_column, date_start, date_end, date_operator, date_operator_start, date_operator_end)
 
-        # Build SQL query
+        # Build SQL query dynamically quoting identifiers
+        q_col = self._quote_identifier(column)
+        q_schema = self._quote_identifier(schema) if schema and schema != 'file' else None
+        q_table = self._quote_identifier(table)
+        full_table = f"{q_schema}.{q_table}" if q_schema else q_table
+
         op_map = {
-            'count': f'COUNT("{column}")',
-            'min': f'MIN("{column}")',
-            'max': f'MAX("{column}")',
-            'sum': f'SUM("{column}")',
-            'avg': f'AVG("{column}")',
-            'distinct_count': f'COUNT(DISTINCT "{column}")',
-            'null_check': f'SUM(CASE WHEN "{column}" IS NULL THEN 1 ELSE 0 END)',
+            'count': f'COUNT({q_col})',
+            'min': f'MIN({q_col})',
+            'max': f'MAX({q_col})',
+            'sum': f'SUM({q_col})',
+            'avg': f'AVG({q_col})',
+            'distinct_count': f'COUNT(DISTINCT {q_col})',
+            'null_check': f'SUM(CASE WHEN {q_col} IS NULL THEN 1 ELSE 0 END)',
             'row_count': 'COUNT(*)',
-            'min_date': f'MIN("{column}")',
-            'max_date': f'MAX("{column}")',
-            'length_sum_check': f'SUM(LENGTH("{column}"))',
-            'sum_length': f'SUM(LENGTH("{column}"))',
-            'regex_check': f'SUM(CASE WHEN "{column}" IS NOT NULL AND "{column}" != \'\' THEN 1 ELSE 0 END)',
-            'unique_check': f'COUNT(DISTINCT "{column}")',
-            'range_check': f'SUM(CASE WHEN "{column}" >= 0 THEN 1 ELSE 0 END)',
+            'min_date': f'MIN({q_col})',
+            'max_date': f'MAX({q_col})',
+            'length_sum_check': f'SUM(LENGTH({q_col}))',
+            'sum_length': f'SUM(LENGTH({q_col}))',
+            'regex_check': f'SUM(CASE WHEN {q_col} IS NOT NULL AND {q_col} != \'\' THEN 1 ELSE 0 END)',
+            'unique_check': f'COUNT(DISTINCT {q_col})',
+            'range_check': f'SUM(CASE WHEN {q_col} >= 0 THEN 1 ELSE 0 END)',
+            'equals': f'SUM({q_col})',
+            'equals_check': f'MIN({q_col})',
+            'case_insensitive_check': f'MIN(LOWER({q_col}))',
+            'trim_check': f'SUM(CASE WHEN {q_col} != TRIM({q_col}) THEN 1 ELSE 0 END)',
+            'contains_check': f'SUM(CASE WHEN {q_col} LIKE \'% %\' THEN 1 ELSE 0 END)',
+            'starts_with_check': f'SUM(CASE WHEN {q_col} IS NOT NULL AND SUBSTR({q_col}, 1, 1) BETWEEN \'A\' AND \'z\' THEN 1 ELSE 0 END)',
+            'ends_with_check': f'SUM(CASE WHEN {q_col} IS NOT NULL AND SUBSTR({q_col}, LENGTH({q_col}), 1) BETWEEN \'A\' AND \'z\' THEN 1 ELSE 0 END)',
+            'pattern_match': self._pattern_match_sql(q_col),
+            'hash_validation': self._hash_validation_sql(q_col),
         }
 
-        agg_expr = op_map.get(operation, f'COUNT("{column}")')
-        full_table = f'"{schema}"."{table}"' if schema and schema != 'file' else f'"{table}"'
+        agg_expr = op_map.get(operation, f'COUNT({q_col})')
         query = f"SELECT {agg_expr} AS result FROM {full_table}"
 
         # Add date filter
         conditions = []
         if date_column:
+            q_date_col = self._quote_identifier(date_column)
             if date_operator:
-                conditions.append(f'"{date_column}" {date_operator} :date_start')
+                conditions.append(f'{q_date_col} {date_operator} :date_start')
             else:
                 if date_start:
-                    conditions.append(f'"{date_column}" >= :date_start')
+                    conditions.append(f'{q_date_col} {date_operator_start} :date_start')
                 if date_end:
-                    conditions.append(f'"{date_column}" <= :date_end')
+                    conditions.append(f'{q_date_col} {date_operator_end} :date_end')
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -398,16 +550,16 @@ class ConnectorEngine:
             df = self.execute_query(query, params)
             return df.iloc[0]['result'] if not df.empty else None
         except Exception as e:
-            logger.error(f"Aggregation error: {e}")
+            logger.error(f"Aggregation error for {full_table}.{column} ({operation}): {e}")
             return None
 
-    def _file_aggregation(self, table, column, operation, date_column=None, date_start=None, date_end=None, date_operator=None):
+    def _file_aggregation(self, table, column, operation, date_column=None, date_start=None, date_end=None, date_operator=None, date_operator_start='>=', date_operator_end='<='):
         """Perform aggregation on a file column with optional date filtering."""
         try:
             df = self.read_file(table=table)
             if df is None or column not in df.columns:
                 return None
-
+ 
             # Filter by date if applicable
             if date_column and date_column in df.columns:
                 if date_operator:
@@ -424,10 +576,27 @@ class ConnectorEngine:
                     elif date_operator == '<=':
                         df = df[df_date <= ref_date]
                 else:
+                    df_date = pd.to_datetime(df[date_column])
                     if date_start:
-                        df = df[pd.to_datetime(df[date_column]) >= pd.to_datetime(date_start)]
+                        ref_start = pd.to_datetime(date_start)
+                        if date_operator_start == '>':
+                            df = df[df_date > ref_start]
+                        elif date_operator_start == '<':
+                            df = df[df_date < ref_start]
+                        elif date_operator_start == '>=':
+                            df = df[df_date >= ref_start]
+                        elif date_operator_start == '<=':
+                            df = df[df_date <= ref_start]
                     if date_end:
-                        df = df[pd.to_datetime(df[date_column]) <= pd.to_datetime(date_end)]
+                        ref_end = pd.to_datetime(date_end)
+                        if date_operator_end == '>':
+                            df = df[df_date > ref_end]
+                        elif date_operator_end == '<':
+                            df = df[df_date < ref_end]
+                        elif date_operator_end == '>=':
+                            df = df[df_date >= ref_end]
+                        elif date_operator_end == '<=':
+                            df = df[df_date <= ref_end]
 
             col = self._get_cleaned_column(df[column])
             op_map = {
@@ -447,6 +616,15 @@ class ConnectorEngine:
                 'regex_check': lambda: col.astype(str).str.match(r'^[a-zA-Z0-9_\-\.\s@]+$').sum(),
                 'unique_check': lambda: col.nunique(),
                 'range_check': lambda: (col >= 0).sum() if pd.api.types.is_numeric_dtype(col) else len(col),
+                'equals': lambda: col.sum(),
+                'equals_check': lambda: col.min() if not col.empty else None,
+                'case_insensitive_check': lambda: col.astype(str).str.lower().min() if not col.empty else None,
+                'trim_check': lambda: col.astype(str).apply(lambda x: x != x.strip()).sum(),
+                'contains_check': lambda: col.astype(str).str.contains(' ').sum(),
+                'starts_with_check': lambda: col.astype(str).str.slice(0, 1).str.isalpha().sum(),
+                'ends_with_check': lambda: col.astype(str).str.slice(-1).str.isalpha().sum(),
+                'pattern_match': lambda: col.astype(str).str.match(r'^[a-zA-Z0-9_\-\.\s@]+$').sum(),
+                'hash_validation': lambda: self._file_hash_calculation(col),
             }
 
             func = op_map.get(operation)
@@ -460,28 +638,39 @@ class ConnectorEngine:
             logger.error(f"File aggregation error: {e}")
         return None
 
-    def check_duplicates(self, schema, table, column, date_column=None, date_start=None, date_end=None, date_operator=None):
+    def _file_hash_calculation(self, col):
+        import hashlib
+        hashes = col.dropna().astype(str).apply(lambda x: int(hashlib.md5(x.encode('utf-8')).hexdigest(), 16) % (2**31 - 1))
+        hash_sum = hashes.sum()
+        return hashlib.md5(str(hash_sum).encode('utf-8')).hexdigest()
+
+    def check_duplicates(self, schema, table, column, date_column=None, date_start=None, date_end=None, date_operator=None, date_operator_start='>=', date_operator_end='<='):
         """Check for duplicate values in a column with optional date filtering."""
         if self.is_mocked():
             return 0
         if self.connection.is_file:
-            return self._file_aggregation(table, column, 'duplicate_check', date_column, date_start, date_end, date_operator)
+            return self._file_aggregation(table, column, 'duplicate_check', date_column, date_start, date_end, date_operator, date_operator_start, date_operator_end)
 
-        full_table = f'"{schema}"."{table}"' if schema and schema != 'file' else f'"{table}"'
+        q_col = self._quote_identifier(column)
+        q_schema = self._quote_identifier(schema) if schema and schema != 'file' else None
+        q_table = self._quote_identifier(table)
+        full_table = f"{q_schema}.{q_table}" if q_schema else q_table
+
         query = f"""
-            SELECT COUNT(*) - COUNT(DISTINCT "{column}") AS duplicates
+            SELECT COUNT(*) - COUNT(DISTINCT {q_col}) AS duplicates
             FROM {full_table}
         """
         # Add date filter
         conditions = []
         if date_column:
+            q_date_col = self._quote_identifier(date_column)
             if date_operator:
-                conditions.append(f'"{date_column}" {date_operator} :date_start')
+                conditions.append(f'{q_date_col} {date_operator} :date_start')
             else:
                 if date_start:
-                    conditions.append(f'"{date_column}" >= :date_start')
+                    conditions.append(f'{q_date_col} {date_operator_start} :date_start')
                 if date_end:
-                    conditions.append(f'"{date_column}" <= :date_end')
+                    conditions.append(f'{q_date_col} {date_operator_end} :date_end')
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -495,5 +684,6 @@ class ConnectorEngine:
         try:
             df = self.execute_query(query, params)
             return df.iloc[0]['duplicates'] if not df.empty else 0
-        except Exception:
+        except Exception as e:
+            logger.error(f"Check duplicates error for {full_table}.{column}: {e}")
             return None

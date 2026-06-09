@@ -33,22 +33,26 @@ class Mapping(models.Model):
     # Date Filter
     date_filter_column = models.CharField(max_length=200, blank=True)
     date_filter_type = models.CharField(max_length=20, choices=DATE_FILTER_TYPES, default='none')
-    date_filter_start = models.DateField(null=True, blank=True)
-    date_filter_end = models.DateField(null=True, blank=True)
+    date_filter_start = models.CharField(max_length=50, null=True, blank=True)
+    date_filter_end = models.CharField(max_length=50, null=True, blank=True)
     date_operator = models.CharField(max_length=5, default='=')
 
     # Separate Date Filters
     source_date_column = models.CharField(max_length=200, blank=True)
     source_date_filter_type = models.CharField(max_length=20, choices=DATE_FILTER_TYPES, default='none')
-    source_date_filter_start = models.DateField(null=True, blank=True)
-    source_date_filter_end = models.DateField(null=True, blank=True)
+    source_date_filter_start = models.CharField(max_length=50, null=True, blank=True)
+    source_date_filter_end = models.CharField(max_length=50, null=True, blank=True)
     source_date_operator = models.CharField(max_length=5, default='=')
+    source_date_range_operator_start = models.CharField(max_length=5, default='>=')
+    source_date_range_operator_end = models.CharField(max_length=5, default='<=')
 
     target_date_column = models.CharField(max_length=200, blank=True)
     target_date_filter_type = models.CharField(max_length=20, choices=DATE_FILTER_TYPES, default='none')
-    target_date_filter_start = models.DateField(null=True, blank=True)
-    target_date_filter_end = models.DateField(null=True, blank=True)
+    target_date_filter_start = models.CharField(max_length=50, null=True, blank=True)
+    target_date_filter_end = models.CharField(max_length=50, null=True, blank=True)
     target_date_operator = models.CharField(max_length=5, default='=')
+    target_date_range_operator_start = models.CharField(max_length=5, default='>=')
+    target_date_range_operator_end = models.CharField(max_length=5, default='<=')
 
     # Metadata
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='mappings')
@@ -102,6 +106,11 @@ class ValidationRule(models.Model):
         ('range_check', 'Range Check'),
         ('min_date', 'Min Date'),
         ('max_date', 'Max Date'),
+        ('case_insensitive_check', 'Case Insensitive Check'),
+        ('trim_check', 'Trim Check'),
+        ('contains_check', 'Contains Check'),
+        ('pattern_match', 'Pattern Match'),
+        ('hash_validation', 'Hash Validation'),
     ]
 
     column_mapping = models.ForeignKey(

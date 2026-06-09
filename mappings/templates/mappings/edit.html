@@ -1,21 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Create Pipeline | QualiX{% endblock %}
-{% block page_title %}Create Pipeline{% endblock %}
+{% block title %}Edit Pipeline | QualiX{% endblock %}
+{% block page_title %}Edit Pipeline{% endblock %}
 
 {% block content %}
-<form method="post" action="{% url 'mappings:create' %}" id="mapping-form">
+<form method="post" action="{% url 'mappings:edit' mapping.id %}" id="mapping-form">
     {% csrf_token %}
     <input type="hidden" name="column_mappings_json" id="column-mappings-json" value="[]">
-
-    <!-- Draft Restore Banner -->
-    <div id="draft-banner-mapping_create" class="alert alert-info mb-16" style="display: none; justify-content: space-between; align-items: center; border-left: 4px solid var(--primary);">
-        <span style="font-weight: 500;"><i class="fas fa-info-circle"></i> Unsaved draft loaded automatically.</span>
-        <div class="d-flex gap-8">
-            <button type="button" class="btn btn-xs btn-primary" id="resume-draft-btn-mapping_create">Resume</button>
-            <button type="button" class="btn btn-xs btn-outline" id="discard-draft-btn-mapping_create" style="border-color: rgba(255,255,255,0.2);">Discard</button>
-        </div>
-    </div>
 
     <div class="card mb-24">
         <div class="card-header">
@@ -64,8 +55,6 @@
                         <option value="">-- Select --</option>
                     </select>
                 </div>
-
-
             </div>
         </div>
 
@@ -101,8 +90,6 @@
                         <option value="">-- Select --</option>
                     </select>
                 </div>
-
-
             </div>
         </div>
     </div>
@@ -359,12 +346,9 @@
     <!-- Submit -->
     <div class="d-flex justify-end gap-12">
         <input type="hidden" name="is_draft" id="is-draft-input" value="false">
-        <a href="{% url 'mappings:list' %}" class="btn btn-outline">Cancel</a>
-        <button type="button" class="btn btn-secondary btn-lg" onclick="saveFormDraft('mapping-form', 'mapping_create')" style="background: #fff; border: 1px solid #CBD5E1; color: #1E293B;">
-            <i class="fas fa-file-signature"></i> Save Draft
-        </button>
+        <a href="{% url 'mappings:detail' mapping.id %}" class="btn btn-outline">Cancel</a>
         <button type="submit" class="btn btn-primary btn-lg" onclick="document.getElementById('is-draft-input').value='false'; return prepareSubmit()">
-            <i class="fas fa-save"></i> Save Pipeline
+            <i class="fas fa-save"></i> Save Changes
         </button>
     </div>
 </form>
@@ -375,11 +359,15 @@ function toggleAllCheckboxes(selector, check = true) {
     document.querySelectorAll(selector).forEach(cb => cb.checked = check);
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize Draft Manager
-    setupFormDraftManager('mapping-form', 'mapping_create', {
-        onRestore: restoreMappingDraft
-    });
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const mappingData = JSON.parse('{{ mapping_json|escapejs }}');
+        await restoreMappingDraft(mappingData);
+        window.isRestoringDraft = false;
+    } catch (e) {
+        console.error("Failed to restore pipeline details", e);
+        showToast("Failed to restore pipeline details", "error");
+    }
 });
 
 function prepareSubmit() {
@@ -411,7 +399,6 @@ function prepareSubmit() {
             return false;
         }
     }
-    // 'all' mode — no individual column check needed
 
     const jsonStr = getColumnMappingsJSON();
     document.getElementById('column-mappings-json').value = jsonStr;

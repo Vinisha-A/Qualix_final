@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block title %}Help Center | QualiX{% endblock %}
+
+{% block page_title %}Help Center{% endblock %}
+
+{% block extra_css %}
+<style>
+    .help-layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 24px;
+        align-items: start;
+    }
+    
+    /* Category List Group styling */
+    .list-group-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        border-radius: var(--radius-md);
+        font-weight: 500;
+        color: var(--text-secondary);
+        text-decoration: none;
+        transition: all var(--transition-fast);
+        border: 1px solid transparent;
+        background: transparent;
+    }
+    .list-group-item:hover {
+        background: var(--primary-subtle);
+        color: var(--primary);
+        transform: translateX(4px);
+    }
+    .list-group-item.active {
+        background: var(--primary);
+        color: var(--text-inverse);
+        font-weight: 600;
+        box-shadow: var(--shadow-sm);
+    }
+    .list-group-item.active:hover {
+        background: var(--primary-dark);
+        color: var(--text-inverse);
+        transform: none;
+    }
+
+    /* Table & Card styles */
+    .doc-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 16px;
+    }
+    .doc-table th, .doc-table td {
+        padding: 16px;
+        text-align: left;
+        border-bottom: 1px solid var(--border-light);
+        vertical-align: top;
+    }
+    .doc-table th {
+        background: var(--primary-subtle);
+        color: var(--primary-dark);
+        font-weight: 700;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    .doc-table tr:hover {
+        background: rgba(0, 76, 143, 0.01);
+    }
+
+    /* Operation Info alias label */
+    .op-alias {
+        display: inline-block;
+        font-family: monospace;
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        background: var(--bg-hover);
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-top: 4px;
+        border: 1px solid var(--border-light);
+    }
+    .op-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    /* Glass Alerts for MATCH / MISMATCH */
+    .glass-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: var(--radius-md);
+        font-size: 0.8rem;
+        line-height: 1.4;
+    }
+    .glass-alert:not(:last-child) {
+        margin-bottom: 8px;
+    }
+    .glass-alert.success {
+        background: rgba(16, 185, 129, 0.03);
+        border: 1px solid rgba(16, 185, 129, 0.12);
+        color: var(--success-dark);
+    }
+    .glass-alert.danger {
+        background: rgba(239, 68, 68, 0.03);
+        border: 1px solid rgba(239, 68, 68, 0.12);
+        color: var(--danger-dark);
+    }
+    .glass-badge {
+        font-weight: 800;
+        font-size: 0.65rem;
+        letter-spacing: 0.5px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+    .success-badge {
+        background: rgba(16, 185, 129, 0.12);
+        color: var(--success-dark);
+    }
+    .danger-badge {
+        background: rgba(239, 68, 68, 0.12);
+        color: var(--danger-dark);
+    }
+
+    /* Search controls */
+    .search-container {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+    .search-input-wrapper {
+        position: relative;
+        flex-grow: 1;
+    }
+    .search-input-wrapper i {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+    }
+    .search-control {
+        width: 100%;
+        padding: 10px 16px 10px 40px;
+        border: 1px solid var(--border-medium);
+        border-radius: var(--radius-md);
+        background: var(--bg-input);
+        font-size: var(--font-size-base);
+        color: var(--text-primary);
+        transition: all var(--transition-fast);
+    }
+    .search-control:focus {
+        border-color: var(--border-focus);
+        background: var(--bg-card);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(0, 76, 143, 0.1);
+    }
+
+    /* Responsive */
+    @media (max-width: 992px) {
+        .help-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="help-layout">
+    <!-- Category Sidebar Panel -->
+    <div class="card shadow-sm" style="position: sticky; top: 24px;">
+        <div class="card-header" style="background: var(--primary-light); color: var(--primary); padding: 16px 20px; border-bottom: 1px solid var(--border-light);">
+            <h3 style="margin: 0; font-size: 0.95rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-book-open"></i> Operations Categories
+            </h3>
+        </div>
+        <div class="card-body" style="padding: 12px;">
+            <div class="list-group" style="display: flex; flex-direction: column; gap: 4px;">
+                <a href="{% url 'help_category' category='string' %}" class="list-group-item {% if category == 'string' %}active{% endif %}">
+                    <span><i class="fas fa-font" style="margin-right: 10px; width: 16px; text-align: center;"></i> String Operations</span>
+                    <i class="fas fa-chevron-right" style="font-size: 0.75rem; opacity: 0.7;"></i>
+                </a>
+                <a href="{% url 'help_category' category='integer' %}" class="list-group-item {% if category == 'integer' %}active{% endif %}">
+                    <span><i class="fas fa-hashtag" style="margin-right: 10px; width: 16px; text-align: center;"></i> Integer Operations</span>
+                    <i class="fas fa-chevron-right" style="font-size: 0.75rem; opacity: 0.7;"></i>
+                </a>
+                <a href="{% url 'help_category' category='float' %}" class="list-group-item {% if category == 'float' %}active{% endif %}">
+                    <span><i class="fas fa-percentage" style="margin-right: 10px; width: 16px; text-align: center;"></i> Float Operations</span>
+                    <i class="fas fa-chevron-right" style="font-size: 0.75rem; opacity: 0.7;"></i>
+                </a>
+                <a href="{% url 'help_category' category='date' %}" class="list-group-item {% if category == 'date' %}active{% endif %}">
+                    <span><i class="fas fa-calendar-alt" style="margin-right: 10px; width: 16px; text-align: center;"></i> Date Operations</span>
+                    <i class="fas fa-chevron-right" style="font-size: 0.75rem; opacity: 0.7;"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Documentation panel -->
+    <div class="card shadow-sm">
+        <div class="card-header" style="background: var(--bg-card); padding: 20px 24px; border-bottom: 1px solid var(--border-light);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div>
+                    <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">{{ title }}</h2>
+                    <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: var(--text-secondary);">Browse validation checks, execution logic, and verification rules for {{ category }} columns.</p>
+                </div>
+            </div>
+        </div>
+        <div class="card-body" style="padding: 24px;">
+            <!-- Search bar -->
+            <form method="get" action="." class="search-container">
+                <div class="search-input-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" name="query" value="{{ query }}" placeholder="Search operations, alias names, or working logic..." class="search-control" autocomplete="off">
+                </div>
+                <button type="submit" class="btn btn-primary" style="display: flex; align-items: center; gap: 8px;">
+                    Search
+                </button>
+                {% if query %}
+                <a href="." class="btn btn-outline" style="display: flex; align-items: center; justify-content: center; text-decoration: none;">
+                    Reset
+                </a>
+                {% endif %}
+            </form>
+
+            {% if query %}
+            <div style="margin-bottom: 16px; font-size: 0.85rem; color: var(--text-secondary);">
+                Filtered by <strong style="color: var(--primary);">"{{ query }}"</strong> &mdash; Found <strong>{{ operations|length }}</strong> results.
+            </div>
+            {% endif %}
+
+            <!-- Table of Operations -->
+            {% if operations %}
+            <div style="overflow-x: auto; border: 1px solid var(--border-light); border-radius: var(--radius-md);">
+                <table class="doc-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 25%;">Operation & Alias</th>
+                            <th style="width: 35%;">Internal Working / Logic</th>
+                            <th style="width: 40%;">Why is there a match/mismatch</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for op in operations %}
+                        <tr>
+                            <td>
+                                <div class="op-title">{{ op.alias }}</div>
+                                <span class="op-alias">{{ op.name }}</span>
+                            </td>
+                            <td>
+                                <div style="font-size: 0.875rem; color: var(--text-primary); line-height: 1.5; font-weight: 400;">
+                                    {{ op.logic }}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="glass-alert success">
+                                    <span class="badge glass-badge success-badge">MATCH</span>
+                                    <span style="font-weight: 500;">{{ op.match }}</span>
+                                </div>
+                                <div class="glass-alert danger">
+                                    <span class="badge glass-badge danger-badge">MISMATCH</span>
+                                    <span style="font-weight: 500;">{{ op.mismatch }}</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <!-- Empty search state -->
+            <div style="text-align: center; padding: 48px 24px; background: var(--primary-subtle); border-radius: var(--radius-md); border: 1px dashed var(--border-medium);">
+                <i class="fas fa-search-minus" style="font-size: 2.5rem; color: var(--text-muted); margin-bottom: 16px;"></i>
+                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: var(--text-primary);">No operations matched your search</h3>
+                <p style="margin: 8px 0 16px 0; font-size: 0.85rem; color: var(--text-secondary);">We couldn't find anything matching "{{ query }}" in this category.</p>
+                <a href="." class="btn btn-primary btn-sm" style="text-decoration: none;">Clear Filter</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -64,3 +64,39 @@ class NotificationTestCase(TestCase):
         response = self.client.get(reverse('dashboard:api_get_notifications'))
         self.assertEqual(response.json()['unread_count'], 0)
         self.assertEqual(response.json()['notifications'][0]['is_read'], True)
+
+
+class HelpCenterTestCase(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='helpuser', password='password123')
+
+    def test_unauthenticated_redirect(self):
+        response = self.client.get(reverse('help_index'))
+        self.assertEqual(response.status_code, 302) # Redirect to login
+
+    def test_authenticated_help_index(self):
+        self.client.login(username='helpuser', password='password123')
+        response = self.client.get(reverse('help_index'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "String Operations Documentation")
+        self.assertContains(response, "null_check")
+
+    def test_authenticated_help_category(self):
+        self.client.login(username='helpuser', password='password123')
+        response = self.client.get(reverse('help_category', kwargs={'category': 'float'}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Float Operations Documentation")
+        self.assertContains(response, "precision_check")
+
+    def test_help_search_filtering(self):
+        self.client.login(username='helpuser', password='password123')
+        # Search match
+        response = self.client.get(reverse('help_index') + "?query=Null")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Null Check")
+        
+        # Search mismatch (no results)
+        response_empty = self.client.get(reverse('help_index') + "?query=xyz_nonexistent_search_query")
+        self.assertEqual(response_empty.status_code, 200)
+        self.assertContains(response_empty, "No operations matched your search")
+

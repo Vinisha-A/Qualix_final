@@ -67,6 +67,10 @@
                 <div class="user-role">{{ user_profile.role|default:"User" }}</div>
             </div>
         </div>
+        <a href="{% url 'help_index' %}" class="nav-item {% if request.resolver_match.url_name == 'help_index' or request.resolver_match.url_name == 'help_category' %}active{% endif %}" style="margin-top: 8px;">
+            <span class="nav-icon"><i class="fas fa-question-circle"></i></span>
+            Help Center
+        </a>
         <a href="{% url 'accounts:logout' %}" class="nav-item" style="margin-top: 8px; color: var(--accent);">
             <span class="nav-icon"><i class="fas fa-sign-out-alt"></i></span>
             Logout

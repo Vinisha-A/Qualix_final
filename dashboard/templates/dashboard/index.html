@@ -219,6 +219,7 @@
             </div>
 
             <input type="hidden" name="column_mappings_json" id="column-mappings-json" value="[]">
+            <input type="hidden" name="parameters" id="parameters-json" value="{}">
 
             <!-- New Separate Date Filter Settings -->
             <div class="card mb-24 date-filter-section" style="box-shadow: none; border: 1.5px solid var(--border-light); background: var(--bg-card); border-radius: var(--radius-lg);">
@@ -241,6 +242,11 @@
                                     <option value="">-- Select Date Column --</option>
                                 </select>
                             </div>
+                            <div class="form-group mb-12">
+                                <label class="d-flex align-center gap-6" style="font-weight: 500; font-size: 0.85rem; cursor: pointer; margin-bottom: 0;">
+                                    <input type="checkbox" id="source-include-timestamp" onchange="toggleTimeFormat('source')"> Include Timestamp (24h)
+                                </label>
+                            </div>
                              <div class="form-group mb-12">
                                 <label style="font-weight: 500; font-size: 0.85rem; display: block; margin-bottom: 6px;">Date Selection Type</label>
                                 <div style="display: flex; gap: 16px;">
@@ -252,18 +258,51 @@
                                     </label>
                                 </div>
                             </div>
-                            <div id="source-single-date-wrapper" style="display: none;" class="form-group mb-12">
-                                <label style="font-weight: 500; font-size: 0.85rem;">Date</label>
-                                <input type="date" name="source_date_single" id="source-date-single" class="form-control">
-                            </div>
-                            <div id="source-range-date-wrapper" style="display: none;" class="d-flex gap-12">
-                                <div class="form-group" style="flex: 1; margin-bottom: 0;">
-                                    <label style="font-weight: 500; font-size: 0.85rem;">From Date</label>
-                                    <input type="date" name="source_date_filter_start" id="source-date-filter-start" class="form-control">
+                            <div id="source-single-date-wrapper" style="display: none;">
+                                <div class="form-group mb-12">
+                                    <label style="font-weight: 500; font-size: 0.85rem;">Comparison Operator</label>
+                                    <select name="source_date_operator" id="source-date-operator" class="form-control">
+                                        <option value=">">&gt;</option>
+                                        <option value="<">&lt;</option>
+                                        <option value=">=" selected>&gt;=</option>
+                                        <option value="<=">&lt;=</option>
+                                    </select>
                                 </div>
-                                <div class="form-group" style="flex: 1; margin-bottom: 0;">
-                                    <label style="font-weight: 500; font-size: 0.85rem;">To Date</label>
-                                    <input type="date" name="source_date_filter_end" id="source-date-filter-end" class="form-control">
+                                <div class="form-group mb-12">
+                                    <label style="font-weight: 500; font-size: 0.85rem;">Date</label>
+                                    <input type="date" name="source_date_single" id="source-date-single" class="form-control">
+                                </div>
+                            </div>
+                            <div id="source-range-date-wrapper" style="display: none;" class="d-flex gap-12 flex-wrap">
+                                <div style="flex: 1; min-width: 120px;">
+                                    <div class="form-group mb-12">
+                                        <label style="font-weight: 500; font-size: 0.85rem;">From Operator</label>
+                                        <select name="source_date_range_operator_start" id="source-date-range-operator-start" class="form-control">
+                                            <option value=">">&gt;</option>
+                                            <option value="<">&lt;</option>
+                                            <option value=">=" selected>&gt;=</option>
+                                            <option value="<=">&lt;=</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group mb-0">
+                                        <label style="font-weight: 500; font-size: 0.85rem;">From Date</label>
+                                        <input type="date" name="source_date_filter_start" id="source-date-filter-start" class="form-control">
+                                    </div>
+                                </div>
+                                <div style="flex: 1; min-width: 120px;">
+                                    <div class="form-group mb-12">
+                                        <label style="font-weight: 500; font-size: 0.85rem;">To Operator</label>
+                                        <select name="source_date_range_operator_end" id="source-date-range-operator-end" class="form-control">
+                                            <option value=">">&gt;</option>
+                                            <option value="<">&lt;</option>
+                                            <option value=">=">&gt;=</option>
+                                            <option value="<=" selected>&lt;=</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group mb-0">
+                                        <label style="font-weight: 500; font-size: 0.85rem;">To Date</label>
+                                        <input type="date" name="source_date_filter_end" id="source-date-filter-end" class="form-control">
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -279,6 +318,11 @@
                                     <option value="">-- Select Date Column --</option>
                                 </select>
                             </div>
+                            <div class="form-group mb-12">
+                                <label class="d-flex align-center gap-6" style="font-weight: 500; font-size: 0.85rem; cursor: pointer; margin-bottom: 0;">
+                                    <input type="checkbox" id="target-include-timestamp" onchange="toggleTimeFormat('target')"> Include Timestamp (24h)
+                                </label>
+                            </div>
                              <div class="form-group mb-12">
                                 <label style="font-weight: 500; font-size: 0.85rem; display: block; margin-bottom: 6px;">Date Selection Type</label>
                                 <div style="display: flex; gap: 16px;">
@@ -290,18 +334,51 @@
                                     </label>
                                 </div>
                             </div>
-                            <div id="target-single-date-wrapper" style="display: none;" class="form-group mb-12">
-                                <label style="font-weight: 500; font-size: 0.85rem;">Date</label>
-                                <input type="date" name="target_date_single" id="target-date-single" class="form-control">
-                            </div>
-                            <div id="target-range-date-wrapper" style="display: none;" class="d-flex gap-12">
-                                <div class="form-group" style="flex: 1; margin-bottom: 0;">
-                                    <label style="font-weight: 500; font-size: 0.85rem;">From Date</label>
-                                    <input type="date" name="target_date_filter_start" id="target-date-filter-start" class="form-control">
+                            <div id="target-single-date-wrapper" style="display: none;">
+                                <div class="form-group mb-12">
+                                    <label style="font-weight: 500; font-size: 0.85rem;">Comparison Operator</label>
+                                    <select name="target_date_operator" id="target-date-operator" class="form-control">
+                                        <option value=">">&gt;</option>
+                                        <option value="<">&lt;</option>
+                                        <option value=">=" selected>&gt;=</option>
+                                        <option value="<=">&lt;=</option>
+                                    </select>
                                 </div>
-                                <div class="form-group" style="flex: 1; margin-bottom: 0;">
-                                    <label style="font-weight: 500; font-size: 0.85rem;">To Date</label>
-                                    <input type="date" name="target_date_filter_end" id="target-date-filter-end" class="form-control">
+                                <div class="form-group mb-12">
+                                    <label style="font-weight: 500; font-size: 0.85rem;">Date</label>
+                                    <input type="date" name="target_date_single" id="target-date-single" class="form-control">
+                                </div>
+                            </div>
+                            <div id="target-range-date-wrapper" style="display: none;" class="d-flex gap-12 flex-wrap">
+                                <div style="flex: 1; min-width: 120px;">
+                                    <div class="form-group mb-12">
+                                        <label style="font-weight: 500; font-size: 0.85rem;">From Operator</label>
+                                        <select name="target_date_range_operator_start" id="target-date-range-operator-start" class="form-control">
+                                            <option value=">">&gt;</option>
+                                            <option value="<">&lt;</option>
+                                            <option value=">=" selected>&gt;=</option>
+                                            <option value="<=">&lt;=</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group mb-0">
+                                        <label style="font-weight: 500; font-size: 0.85rem;">From Date</label>
+                                        <input type="date" name="target_date_filter_start" id="target-date-filter-start" class="form-control">
+                                    </div>
+                                </div>
+                                <div style="flex: 1; min-width: 120px;">
+                                    <div class="form-group mb-12">
+                                        <label style="font-weight: 500; font-size: 0.85rem;">To Operator</label>
+                                        <select name="target_date_range_operator_end" id="target-date-range-operator-end" class="form-control">
+                                            <option value=">">&gt;</option>
+                                            <option value="<">&lt;</option>
+                                            <option value=">=">&gt;=</option>
+                                            <option value="<=" selected>&lt;=</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group mb-0">
+                                        <label style="font-weight: 500; font-size: 0.85rem;">To Date</label>
+                                        <input type="date" name="target_date_filter_end" id="target-date-filter-end" class="form-control">
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -340,6 +417,7 @@
                             <th>Status</th>
                             <th>Match/Mismatch</th>
                             <th>Date</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -360,10 +438,25 @@
                                 <span class="text-danger fw-600">{{ run.failed_checks }}</span>
                             </td>
                             <td class="text-muted">{{ run.created_at|date:"d M H:i" }}</td>
+                            <td>
+                                <div class="d-flex gap-8">
+                                    <a href="{% url 'validations:report' run.id %}" class="btn btn-xs btn-secondary">
+                                        <i class="fas fa-file-alt"></i> Report
+                                    </a>
+                                    {% if user_profile.role != 'auditor' %}
+                                    <form method="post" action="{% url 'validations:delete' run.id %}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete Validation Run {{ run.id }}?');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-xs btn-danger" style="background-color: var(--danger); border-color: var(--danger); color: white; border-radius: var(--radius-sm); padding: 4px 8px; font-size: 0.75rem; cursor: pointer;">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4" class="text-center text-muted p-24">
+                            <td colspan="5" class="text-center text-muted p-24">
                                 No monitor runs yet. <a href="{% url 'mappings:create' %}">Create a pipeline</a> to get started.
                             </td>
                         </tr>
@@ -496,6 +589,39 @@ function validateQuickForm() {
             return false;
         }
     }
+
+    // Prompt for parameter-based operations
+    let parameters = {};
+    const needsParamOps = ['contains_check', 'pattern_match'];
+    for (const mapping of mappings) {
+        if (mapping.source_column === '__all__') {
+            const selectedOps = mapping.operations || [];
+            for (const op of selectedOps) {
+                if (needsParamOps.includes(op)) {
+                    let friendlyOp = op.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    let val = prompt(`You selected '${friendlyOp}' for All Columns. Please enter the input parameter value:`);
+                    if (val === null) {
+                        showToast('Validation run cancelled.', 'warning');
+                        return false;
+                    }
+                    parameters[`__all__:${op}`] = val;
+                }
+            }
+        } else {
+            for (const op of (mapping.operations || [])) {
+                if (needsParamOps.includes(op)) {
+                    let friendlyOp = op.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    let val = prompt(`Please enter parameter value for column "${mapping.source_column}" (${friendlyOp}):`);
+                    if (val === null) {
+                        showToast('Validation run cancelled.', 'warning');
+                        return false;
+                    }
+                    parameters[`${mapping.source_column}:${op}`] = val;
+                }
+            }
+        }
+    }
+    document.getElementById('parameters-json').value = JSON.stringify(parameters);
     
     return true;
 }

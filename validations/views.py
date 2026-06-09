@@ -17,11 +17,28 @@ logger = logging.getLogger('validations')
 def validation_list_view(request):
     """List all validation runs."""
     query = request.GET.get('query', '').strip()
+    status_filter = request.GET.get('status', '').strip()
+    type_filter = request.GET.get('type', '').strip()
+    date_filter = request.GET.get('date', '').strip()
+
     runs = ValidationRun.objects.select_related('mapping', 'triggered_by').all()
     if query:
         runs = runs.filter(mapping__name__icontains=query)
+    if status_filter:
+        runs = runs.filter(status=status_filter)
+    if type_filter:
+        runs = runs.filter(trigger_type=type_filter)
+    if date_filter:
+        runs = runs.filter(created_at__date=date_filter)
+
     runs = runs[:50]
-    return render(request, 'validations/list.html', {'runs': runs, 'query': query})
+    return render(request, 'validations/list.html', {
+        'runs': runs,
+        'query': query,
+        'status_filter': status_filter,
+        'type_filter': type_filter,
+        'date_filter': date_filter
+    })
 
 
 @login_required
@@ -69,11 +86,28 @@ def api_trigger_validation(request, mapping_id):
         return JsonResponse({'success': False, 'error': 'Permission denied: Auditor cannot trigger validations.'}, status=403)
     mapping = get_object_or_404(Mapping, id=mapping_id)
 
+    # Extract JSON parameters if present
+    import json
+    parameters = {}
+    if request.content_type == 'application/json':
+        try:
+            body = json.loads(request.body)
+            parameters = body.get('parameters', {})
+        except Exception:
+            pass
+    else:
+        param_str = request.POST.get('parameters', '{}')
+        try:
+            parameters = json.loads(param_str)
+        except Exception:
+            parameters = {}
+
     run = ValidationRun.objects.create(
         mapping=mapping,
         triggered_by=request.user,
         trigger_type='manual',
         status='pending',
+        parameters=parameters,
     )
 
     # Try to use Celery, fall back to synchronous
@@ -91,7 +125,7 @@ def api_trigger_validation(request, mapping_id):
                 status_text = "Passed" if run.failed_checks == 0 else "Failed"
                 Notification.objects.create(
                     user=run.triggered_by,
-                    title=f"Validation Run #{run.id} Completed",
+                    title=f"Validation Run {run.id} Completed",
                     message=f"Pipeline: {run.mapping.name}\nStatus: {status_text} ({run.passed_checks}/{run.total_checks} checks passed)",
                     level='success' if run.failed_checks == 0 else 'warning'
                 )
@@ -101,7 +135,7 @@ def api_trigger_validation(request, mapping_id):
                 from dashboard.models import Notification
                 Notification.objects.create(
                     user=run.triggered_by,
-                    title=f"Validation Run #{run.id} Failed",
+                    title=f"Validation Run {run.id} Failed",
                     message=f"Pipeline: {run.mapping.name}\nError: {e}",
                     level='error'
                 )
@@ -215,13 +249,13 @@ def get_datatype_category(type_str, name_str=''):
 
 def get_applicable_operations(category):
     if category == 'INTEGER':
-        return ['null_check', 'sum', 'avg', 'min', 'max', 'range_check', 'duplicate_check', 'count', 'row_count']
+        return ['null_check', 'sum', 'avg', 'min', 'max', 'range_check', 'duplicate_check', 'count', 'row_count', 'unique_check', 'distinct_count', 'data_type_check', 'hash_validation']
     elif category == 'DATE':
-        return ['min_date', 'max_date', 'null_check', 'duplicate_check', 'count', 'row_count']
+        return ['min_date', 'max_date', 'null_check', 'duplicate_check', 'count', 'row_count', 'unique_check', 'distinct_count', 'hash_validation']
     elif category == 'BOOLEAN':
-        return ['null_check', 'count', 'row_count', 'duplicate_check']
+        return ['null_check', 'count', 'row_count', 'duplicate_check', 'unique_check', 'distinct_count', 'hash_validation']
     else: # VARCHAR
-        return ['null_check', 'length_sum_check', 'sum_length', 'regex_check', 'duplicate_check', 'unique_check', 'distinct_count', 'row_count', 'count']
+        return ['null_check', 'length_sum_check', 'sum_length', 'regex_check', 'duplicate_check', 'unique_check', 'distinct_count', 'row_count', 'count', 'case_insensitive_check', 'trim_check', 'contains_check', 'pattern_match', 'data_type_check', 'hash_validation']
 
 @login_required
 @contributor_or_admin_required
@@ -289,33 +323,69 @@ def quick_validate_view(request):
             # Create a quick mapping
             from django.utils import timezone
             now_str = timezone.now().strftime('%Y-%m-%d %H:%M')
-            mapping = Mapping.objects.create(
-                name=f"Quick Validate: {source_table} -> {target_table} ({now_str})",
-                description="Triggered from Dashboard Quick Workspace",
-                source_connection_id=source_conn_id,
-                source_schema=source_schema,
-                source_table=source_table,
-                target_connection_id=target_conn_id,
-                target_schema=target_schema,
-                target_table=target_table,
-                created_by=request.user,
-                source_date_column=source_date_column,
-                source_date_filter_type=source_date_filter_type,
-                source_date_filter_start=source_date_filter_start,
-                source_date_filter_end=source_date_filter_end,
-                source_date_value_type=source_date_value_type,
-                source_date_relative_operator=source_date_relative_operator,
-                source_date_relative_value=source_date_relative_value,
-                source_date_operator=source_date_operator,
-                target_date_column=target_date_column,
-                target_date_filter_type=target_date_filter_type,
-                target_date_filter_start=target_date_filter_start,
-                target_date_filter_end=target_date_filter_end,
-                target_date_value_type=target_date_value_type,
-                target_date_relative_operator=target_date_relative_operator,
-                target_date_relative_value=target_date_relative_value,
-                target_date_operator=target_date_operator,
-            )
+            quick_name = f"Quick Validate: {source_table} -> {target_table} ({now_str})".strip()
+            
+            mapping_data = {
+                'name': quick_name,
+                'description': "Triggered from Dashboard Quick Workspace",
+                'source_connection_id': source_conn_id,
+                'source_schema': source_schema,
+                'source_table': source_table,
+                'target_connection_id': target_conn_id,
+                'target_schema': target_schema,
+                'target_table': target_table,
+                'created_by': request.user,
+                'source_date_column': source_date_column,
+                'source_date_filter_type': source_date_filter_type,
+                'source_date_filter_start': source_date_filter_start,
+                'source_date_filter_end': source_date_filter_end,
+                'source_date_operator': source_date_operator,
+                'target_date_column': target_date_column,
+                'target_date_filter_type': target_date_filter_type,
+                'target_date_filter_start': target_date_filter_start,
+                'target_date_filter_end': target_date_filter_end,
+                'target_date_operator': target_date_operator,
+                'source_date_range_operator_start': request.POST.get('source_date_range_operator_start', '>='),
+                'source_date_range_operator_end': request.POST.get('source_date_range_operator_end', '<='),
+                'target_date_range_operator_start': request.POST.get('target_date_range_operator_start', '>='),
+                'target_date_range_operator_end': request.POST.get('target_date_range_operator_end', '<='),
+                # Stale fields that might be submitted from client or UI
+                'source_date_value_type': source_date_value_type,
+                'source_date_relative_operator': source_date_relative_operator,
+                'source_date_relative_value': source_date_relative_value,
+                'target_date_value_type': target_date_value_type,
+                'target_date_relative_operator': target_date_relative_operator,
+                'target_date_relative_value': target_date_relative_value,
+            }
+
+            # Dynamic fields verification and defensive logging
+            model_fields = set()
+            for f in Mapping._meta.get_fields():
+                model_fields.add(f.name)
+                if hasattr(f, 'attname'):
+                    model_fields.add(f.attname)
+
+            rejected_fields = {}
+            for key in list(mapping_data.keys()):
+                if key not in model_fields:
+                    rejected_fields[key] = mapping_data[key]
+                    logger.warning(
+                        f"Field mismatch: Submitted field '{key}' is not a valid attribute of the Mapping model. "
+                        f"Removing from parameters list. "
+                        f"Model fields: {sorted(list(model_fields))}"
+                    )
+                    del mapping_data[key]
+
+            try:
+                mapping = Mapping.objects.create(**mapping_data)
+            except Exception as e:
+                logger.error(
+                    f"Quick validation creation error: {e}. "
+                    f"Submitted keys: {list(mapping_data.keys())}. "
+                    f"Rejected data: {rejected_fields}. "
+                    f"Model fields: {sorted(list(model_fields))}"
+                )
+                raise
 
             try:
                 from dashboard.models import FormDraft
@@ -409,6 +479,12 @@ def quick_validate_view(request):
                     )
             
             # Create Validation Run
+            param_str = request.POST.get('parameters', '{}')
+            try:
+                parameters = json.loads(param_str)
+            except Exception:
+                parameters = {}
+
             run = ValidationRun.objects.create(
                 mapping=mapping,
                 triggered_by=request.user,
@@ -418,6 +494,7 @@ def quick_validate_view(request):
                 source_date_filter_end=source_date_filter_end,
                 target_date_filter_start=target_date_filter_start,
                 target_date_filter_end=target_date_filter_end,
+                parameters=parameters,
             )
             
             # Execute validation run (eager or async)
@@ -434,7 +511,7 @@ def quick_validate_view(request):
                         status_text = "Passed" if run.failed_checks == 0 else "Failed"
                         Notification.objects.create(
                             user=run.triggered_by,
-                            title=f"Validation Run #{run.id} Completed",
+                            title=f"Validation Run {run.id} Completed",
                             message=f"Pipeline: {run.mapping.name}\nStatus: {status_text} ({run.passed_checks}/{run.total_checks} checks passed)",
                             level='success' if run.failed_checks == 0 else 'warning'
                         )
@@ -444,7 +521,7 @@ def quick_validate_view(request):
                         from dashboard.models import Notification
                         Notification.objects.create(
                             user=run.triggered_by,
-                            title=f"Validation Run #{run.id} Failed",
+                            title=f"Validation Run {run.id} Failed",
                             message=f"Pipeline: {run.mapping.name}\nError: {e}",
                             level='error'
                         )
@@ -458,3 +535,42 @@ def quick_validate_view(request):
             return redirect('dashboard:index')
             
     return redirect('dashboard:index')
+
+
+@login_required
+def api_mapping_rules_metadata(request, mapping_id):
+    """AJAX: Get validation rules requiring user parameters."""
+    mapping = get_object_or_404(Mapping, id=mapping_id)
+    rules_needing_params = []
+    
+    column_mappings = mapping.column_mappings.all()
+    for cm in column_mappings:
+        for rule in cm.rules.filter(is_active=True):
+            if rule.operation in ('contains_check', 'pattern_match'):
+                rules_needing_params.append({
+                    'id': rule.id,
+                    'column': cm.source_column,
+                    'operation': rule.operation,
+                    'operation_display': rule.get_operation_display(),
+                })
+                
+    return JsonResponse({
+        'requires_parameters': len(rules_needing_params) > 0,
+        'rules': rules_needing_params
+    })
+
+
+@login_required
+@contributor_or_admin_required
+def validation_delete_view(request, run_id):
+    """Delete a validation run."""
+    run = get_object_or_404(ValidationRun, id=run_id)
+    if request.method == 'POST':
+        run.delete()
+        messages.success(request, f'Validation Run {run_id} deleted successfully.')
+    
+    referer = request.META.get('HTTP_REFERER')
+    if referer and 'report' not in referer and 'progress' not in referer:
+        return redirect(referer)
+    return redirect('validations:list')
+
