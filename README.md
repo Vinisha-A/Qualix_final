@@ -2,20 +2,13 @@
 
 ## Overview
 
-Qualix is a Django-based Data Quality Management Platform that allows users to:
+Qualix is an enterprise Data Quality and Validation Platform that enables users to connect to multiple data sources, configure validation rules, execute quality checks, and monitor results through dashboards and reports.
 
-* Configure data source connections
-* Test connectivity
-* Browse schemas, tables, and columns
-* Execute data quality validations
-* Generate quality reports
-* Monitor data quality through dashboards
+Supported Sources:
 
-Supported data sources:
-
+* Databricks
 * PostgreSQL
 * MySQL
-* Databricks
 * Oracle
 * DB2
 * CSV Files
@@ -23,359 +16,183 @@ Supported data sources:
 
 ---
 
-# High Level Architecture
+# System Architecture
 
-```text
-User
- │
- ▼
-Django Web Application
- │
- ├── Connection Management Module
- │     ├── Create Connection
- │     ├── Edit Connection
- │     ├── Test Connection
- │     └── Store Credentials
- │
- ├── Connector Engine
- │     ├── Build Connection String
- │     ├── Create SQLAlchemy Engine
- │     ├── Connect to Database
- │     └── Retrieve Metadata
- │
- ├── Data Quality Engine
- │     ├── Schema Validation
- │     ├── Table Validation
- │     ├── Column Validation
- │     ├── Row Count Validation
- │     ├── Null Check
- │     ├── Duplicate Check
- │     └── Custom Rules
- │
- ├── Reporting Module
- │     ├── Validation Results
- │     ├── Quality Score
- │     └── Report Generation
- │
- └── Dashboard
-       ├── Summary Metrics
-       ├── Execution History
-       └── Notifications
- │
- ▼
-Data Sources
- ├── PostgreSQL
- ├── MySQL
- ├── Databricks
- ├── Oracle
- ├── DB2
- ├── CSV
- └── Parquet
-```
+## Core Components
+
+### 1. User Interface Layer
+
+Provides web-based access for:
+
+* Connection Management
+* Rule Configuration
+* Validation Execution
+* Dashboard Monitoring
+* Report Viewing
 
 ---
 
-# Project Structure
-
-```text
-qualix/
-│
-├── connections/
-│   ├── models.py
-│   ├── forms.py
-│   ├── views.py
-│   ├── urls.py
-│   └── connector.py
-│
-├── dashboard/
-│
-├── logs/
-│
-├── validations/
-│
-├── reports/
-│
-└── templates/
-```
-
----
-
-# Component Responsibilities
-
-## models.py
+### 2. Connection Management Layer
 
 Responsible for:
 
-* DataConnection model
-* Connection configuration storage
-* Password encryption using Fernet
-* Connection string generation
-* Supported connection types
+* Creating Connections
+* Managing Credentials
+* Testing Connectivity
+* Metadata Discovery
 
-Main Functions:
+Functions:
 
-* set_password()
-* get_password()
-* get_connection_string()
+* Connection Configuration
+* Schema Retrieval
+* Table Discovery
+* Column Discovery
 
 ---
 
-## forms.py
+### 3. Validation Engine
 
 Responsible for:
 
-* Connection creation forms
-* Connection editing forms
-* Input validation
-* Databricks configuration validation
-* Password handling
+* Rule Execution
+* Data Quality Checks
+* Schema Validation
+* Data Validation
+* Result Generation
 
-Validation Examples:
+Validations include:
 
-* Host required
-* Username required
-* Database name required
-* Access token required
+* Null Checks
+* Duplicate Checks
+* Row Count Validation
+* Schema Comparison
+* Custom Business Rules
 
 ---
 
-## views.py
+### 4. Workflow Orchestration Layer
 
 Responsible for:
 
-* UI requests
-* CRUD operations for connections
-* Connection testing API
-* Metadata retrieval APIs
-
-Endpoints:
-
-* Create Connection
-* Edit Connection
-* Delete Connection
-* Test Connection
-* Get Schemas
-* Get Tables
-* Get Columns
+* Job Scheduling
+* Workflow Execution
+* Trigger Management
+* Task Coordination
 
 ---
 
-## connector.py
+### 5. Reporting & Dashboard Layer
 
-Responsible for:
+Provides:
 
-* Connection engine implementation
-* SQLAlchemy integration
-* Engine creation
-* Metadata extraction
-* Query execution
-
-Main Functions:
-
-* get_engine()
-* test_connection()
-* get_schemas()
-* get_tables()
-* get_columns()
+* Quality Metrics
+* Validation Results
+* Historical Trends
+* Execution Monitoring
+* Alerts & Notifications
 
 ---
 
-# Connection Flow
+### 6. Data Source Layer
 
-```text
-User
- │
- ▼
-Create Connection
- │
- ▼
-forms.py Validation
- │
- ▼
-models.py Save Configuration
- │
- ▼
-Encrypt Password
- │
- ▼
-Store Connection
- │
- ▼
-User Clicks Test
- │
- ▼
-views.py
- │
- ▼
-ConnectorEngine
- │
- ▼
-get_engine()
- │
- ▼
-Build Connection String
- │
- ▼
-SQLAlchemy Engine
- │
- ▼
-Target Database
- │
- ▼
-Execute SELECT 1
- │
- ▼
-Success / Failure Response
-```
+External systems connected to Qualix:
 
----
-
-# Databricks Connection Flow
-
-```text
-User
- │
- ▼
-Enter Databricks Details
- │
- ├── Server Hostname
- │
- ├── HTTP Path
- │
- └── Access Token
- │
- ▼
-forms.py Validation
- │
- ▼
-models.py
- │
- ▼
-Generate Connection String
- │
- ▼
-ConnectorEngine.get_engine()
- │
- ▼
-SQLAlchemy Databricks Dialect
- │
- ▼
-Databricks SQL Warehouse
- │
- ▼
-Connection Test
- │
- ▼
-Schema Extraction
-```
-
----
-
-# Security
-
-Credentials are protected using:
-
-* Fernet Encryption
-* Encrypted Password Storage
-* Secure Credential Retrieval
-
-Methods:
-
-* set_password()
-* get_password()
-
----
-
-# Data Quality Workflow
-
-```text
-Connection
- │
- ▼
-Metadata Discovery
- │
- ▼
-Schema Selection
- │
- ▼
-Table Selection
- │
- ▼
-Column Selection
- │
- ▼
-Validation Rules
- │
- ▼
-Execution Engine
- │
- ▼
-Results
- │
- ▼
-Reports
- │
- ▼
-Dashboard
-```
-
----
-
-# Technologies Used
-
-Backend:
-
-* Python
-* Django
-
-Database Connectivity:
-
-* SQLAlchemy
-* PyODBC
-* Database Drivers
-
-Security:
-
-* Cryptography (Fernet)
-
-Supported Databases:
-
+* Databricks SQL Warehouse
 * PostgreSQL
 * MySQL
-* Databricks
 * Oracle
 * DB2
-
-Files:
-
-* CSV
-* Parquet
+* CSV Files
+* Parquet Files
 
 ---
 
-# End-to-End Execution Flow
+### 7. Platform Storage Layer
+
+Stores:
+
+* User Information
+* Connection Configurations
+* Validation Rules
+* Execution History
+* Reports
+* Audit Logs
+
+---
+
+# End-to-End Flow
 
 ```text
 User
+ │
+ ▼
+Web Portal
  │
  ▼
 Connection Management
  │
  ▼
-Connector Engine
+Metadata Discovery
  │
  ▼
-Database/File Source
+Rule Configuration
  │
  ▼
-Metadata Extraction
+Validation Engine
  │
  ▼
-Data Quality Validation
+Workflow Orchestration
  │
  ▼
 Report Generation
  │
  ▼
-Dashboard & Notifications
+Dashboard & Monitoring
+ │
+ ▼
+Platform Database
+```
+
+---
+
+# Architecture Diagram Definition
+
+```text
+┌──────────────────────────────┐
+│           USERS              │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│      WEB APPLICATION         │
+│  Connections • Rules • UI    │
+└──────────────┬───────────────┘
+               │
+      ┌────────┴────────┐
+      ▼                 ▼
+┌──────────────┐ ┌──────────────┐
+│ CONNECTION   │ │ VALIDATION   │
+│ MANAGEMENT   │ │ ENGINE       │
+└──────┬───────┘ └──────┬───────┘
+       │                │
+       ▼                ▼
+┌──────────────────────────────┐
+│   WORKFLOW ORCHESTRATION     │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ REPORTING & DASHBOARD        │
+└──────────────┬───────────────┘
+               │
+      ┌────────┴────────┐
+      ▼                 ▼
+┌──────────────┐ ┌──────────────┐
+│ PLATFORM DB  │ │ DATA SOURCES │
+│              │ │ Databricks   │
+│ Users        │ │ PostgreSQL   │
+│ Rules        │ │ MySQL        │
+│ Reports      │ │ Oracle       │
+│ Audit Logs   │ │ DB2          │
+└──────────────┘ └──────────────┘
 ```
