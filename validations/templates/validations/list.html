@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Monitor{% endblock %}
+{% block page_title %}Monitor Runs{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+        <h2><i class="fas fa-check-double" style="color: var(--primary); margin-right: 8px;"></i> Recent Monitor Runs</h2>
+        <form method="get" action="" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0;">
+            <input type="text" name="query" class="form-control" placeholder="Search pipeline name..." value="{{ query|default:'' }}" style="width: 200px; height: 38px; border-radius: 6px; margin: 0;">
+            
+            <select name="status" class="form-control" onchange="this.form.submit()" style="width: 140px; height: 38px; border-radius: 6px; margin: 0;">
+                <option value="">-- Status --</option>
+                <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+                <option value="running" {% if status_filter == 'running' %}selected{% endif %}>In Progress</option>
+                <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
+                <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+            </select>
+            
+            <select name="type" class="form-control" onchange="this.form.submit()" style="width: 140px; height: 38px; border-radius: 6px; margin: 0;">
+                <option value="">-- Type --</option>
+                <option value="manual" {% if type_filter == 'manual' %}selected{% endif %}>Manual</option>
+                <option value="scheduled" {% if type_filter == 'scheduled' %}selected{% endif %}>DB Trigger</option>
+            </select>
+            
+            <input type="date" name="date" class="form-control" onchange="this.form.submit()" value="{{ date_filter }}" style="width: 150px; height: 38px; border-radius: 6px; margin: 0;">
+            
+            <button type="submit" class="btn btn-primary" style="height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; padding: 0 16px; font-size: 14px; font-weight: 500; cursor: pointer;">
+                <i class="fas fa-search" style="margin-right: 6px;"></i> Search
+            </button>
+            {% if query or status_filter or type_filter or date_filter %}
+            <a href="?" class="btn btn-secondary" style="height: 38px; display: inline-flex; align-items: center; justify-content: center; background: #fff; border: 1px solid #CBD5E1; color: #1E293B; border-radius: 6px; padding: 0 16px; font-weight: 500; font-size: 14px; text-decoration: none;">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>No.</th>
+                        <th>Pipeline</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Match / Mismatch</th>
+                        <th>Triggered By</th>
+                        <th>Type</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in runs %}
+                    <tr>
+                        <td class="fw-600">{{ run.rev_index }}</td>
+                        <td>{{ run.mapping.name }}</td>
+                        <td>
+                            <span class="badge badge-dot {% if run.status == 'completed' %}badge-success{% elif run.status == 'failed' %}badge-danger{% elif run.status == 'running' %}badge-warning{% else %}badge-muted{% endif %}"
+                                  id="status-badge-{{ run.id }}">
+                                {{ run.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="progress-bar" style="width: 100px;">
+                                <div class="progress-fill" id="progress-fill-{{ run.id }}" style="width: {{ run.progress }}%;"></div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="text-success fw-600">{{ run.passed_checks }}</span> /
+                            <span class="text-danger fw-600">{{ run.failed_checks }}</span>
+                            <span class="text-muted">({{ run.total_checks }})</span>
+                        </td>
+                        <td>
+                            {% if run.triggered_by %}
+                                {{ run.triggered_by.get_full_name|default:run.triggered_by.username }}
+                            {% else %}
+                                System
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge {% if run.trigger_type == 'manual' %}badge-info{% else %}badge-primary{% endif %}">
+                                {{ run.get_trigger_type_display }}
+                            </span>
+                        </td>
+                        <td>{{ run.created_at|date:"d M Y H:i" }}</td>
+                        <td>
+                            <div class="d-flex gap-8" style="align-items: center;">
+                                {% if run.status == 'completed' or run.status == 'failed' %}
+                                <a href="{% url 'validations:report' run.id %}" class="btn btn-sm btn-secondary">
+                                    <i class="fas fa-file-alt"></i> Report
+                                </a>
+                                {% elif run.status == 'running' %}
+                                <a href="{% url 'validations:progress' run.id %}" class="btn btn-sm btn-warning">
+                                    <i class="fas fa-spinner fa-spin"></i> Progress
+                                </a>
+                                {% endif %}
+                                {% if user_profile.role != 'auditor' %}
+                                <form method="post" action="{% url 'validations:delete' run.id %}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete Validation Run {{ run.id }}?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-danger" style="background-color: var(--danger); border-color: var(--danger); color: white; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9">
+                            <div class="empty-state">
+                                <div class="empty-icon"><i class="fas fa-check-double"></i></div>
+                                <h3>{% if query %}No Results Found{% else %}No Monitor Runs Yet{% endif %}</h3>
+                                <p>{% if query %}No pipelines matching "{{ query }}" have validation runs.{% else %}Create a pipeline and trigger a monitor run to see results here.{% endif %}</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination controls -->
+        {% if page_obj.has_other_pages %}
+        <div class="pagination-container" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-top: 1px solid var(--border-light); background: var(--bg-card); flex-wrap: wrap; gap: 16px;">
+            <div class="pagination-info text-muted" style="font-size: 0.85rem; font-weight: 500;">
+                Showing <strong style="color: var(--primary);">{{ page_obj.start_index }}</strong> to <strong style="color: var(--primary);">{{ page_obj.end_index }}</strong> of <strong style="color: var(--primary);">{{ paginator.count }}</strong> monitors
+            </div>
+            <div class="pagination-buttons" style="display: flex; gap: 6px; align-items: center;">
+                {% if page_obj.has_previous %}
+                    <a href="?page=1{% if query %}&query={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}" class="btn btn-sm btn-secondary" style="height: 32px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600;" title="First Page">
+                        <i class="fas fa-angle-double-left"></i>
+                    </a>
+                    <a href="?page={{ page_obj.previous_page_number }}{% if query %}&query={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}" class="btn btn-sm btn-secondary" style="height: 32px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600;" title="Previous Page">
+                        <i class="fas fa-angle-left"></i> Prev
+                    </a>
+                {% endif %}
+                
+                <span class="btn btn-sm btn-outline disabled" style="pointer-events: none; border-color: var(--border-medium); color: var(--text-primary); font-weight: 600; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0 16px; font-size: 0.85rem;">
+                    Page {{ page_obj.number }} of {{ paginator.num_pages }}
+                </span>
+
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}{% if query %}&query={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}" class="btn btn-sm btn-secondary" style="height: 32px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600;" title="Next Page">
+                        Next <i class="fas fa-angle-right"></i>
+                    </a>
+                    <a href="?page={{ paginator.num_pages }}{% if query %}&query={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}" class="btn btn-sm btn-secondary" style="height: 32px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600;" title="Last Page">
+                        <i class="fas fa-angle-double-right"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

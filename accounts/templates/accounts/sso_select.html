@@ -1,0 +1,239 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HDFC Bank Single Sign-On (SSO)</title>
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+    <link rel="stylesheet" href="{% static 'css/main.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .sso-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%);
+            padding: 20px;
+            font-family: 'Outfit', 'Inter', sans-serif;
+        }
+        .sso-card {
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 76, 143, 0.1);
+            max-width: 600px;
+            width: 100%;
+            border: none;
+        }
+        .sso-logo img {
+            width: 180px;
+            height: auto;
+            margin-bottom: 16px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .sso-title {
+            color: #004c8f;
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin: 0;
+            text-align: center;
+            letter-spacing: -0.5px;
+        }
+        .sso-subtitle {
+            color: #718096;
+            font-size: 0.95rem;
+            font-weight: 500;
+            margin-top: 8px;
+            margin-bottom: 30px;
+            text-align: center;
+            line-height: 1.5;
+        }
+        .profile-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .profile-card {
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 18px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            background: #ffffff;
+            position: relative;
+            overflow: hidden;
+        }
+        .profile-card:hover {
+            border-color: #004c8f;
+            background: rgba(0, 76, 143, 0.02);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 76, 143, 0.05);
+        }
+        .profile-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .profile-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+        .profile-avatar.admin {
+            background: #e8f0fe;
+            color: #004c8f;
+        }
+        .profile-avatar.contributor {
+            background: #e6fffa;
+            color: #0d9488;
+        }
+        .profile-avatar.auditor {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        .profile-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .profile-name {
+            font-weight: 700;
+            color: #2d3748;
+            font-size: 1.05rem;
+        }
+        .profile-email {
+            color: #718096;
+            font-size: 0.85rem;
+        }
+        .profile-role {
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-block;
+        }
+        .profile-role.admin {
+            background: #e8f0fe;
+            color: #004c8f;
+        }
+        .profile-role.contributor {
+            background: #e6fffa;
+            color: #0d9488;
+        }
+        .profile-role.auditor {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        .btn-authenticate {
+            background: #004c8f;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        .profile-card:hover .btn-authenticate {
+            background: #ed232a;
+        }
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 25px;
+            color: #718096;
+            font-weight: 600;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.2s ease;
+        }
+        .back-link:hover {
+            color: #ed232a;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="sso-container">
+        <div class="sso-card">
+            <div class="sso-logo">
+                <img src="{% static 'images/hdfc_logo.png' %}" alt="HDFC Bank">
+                <h1 class="sso-title">HDFC Bank SSO Portal</h1>
+                <p class="sso-subtitle">Active Directory detected a secure Windows Session. Select the Windows user profile below to simulate Single Sign-On role routing:</p>
+            </div>
+
+            <div class="profile-list">
+                <!-- Admin Profile Card -->
+                <div class="profile-card" onclick="window.location.href='{% url 'accounts:login' %}?sso=1&ad_user=admin'">
+                    <div class="profile-left">
+                        <div class="profile-avatar admin">
+                            <i class="fas fa-user-shield"></i>
+                        </div>
+                        <div class="profile-info">
+                            <div class="profile-name">System Administrator</div>
+                            <div class="profile-email">admin@hdfcbank.com</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span class="profile-role admin">Admin</span>
+                        <button class="btn-authenticate">Sign In</button>
+                    </div>
+                </div>
+
+                <!-- Contributor Profile Card -->
+                <div class="profile-card" onclick="window.location.href='{% url 'accounts:login' %}?sso=1&ad_user=contributor'">
+                    <div class="profile-left">
+                        <div class="profile-avatar contributor">
+                            <i class="fas fa-user-edit"></i>
+                        </div>
+                        <div class="profile-info">
+                            <div class="profile-name">Data Contributor</div>
+                            <div class="profile-email">contributor@hdfcbank.com</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span class="profile-role contributor">Contributor</span>
+                        <button class="btn-authenticate">Sign In</button>
+                    </div>
+                </div>
+
+                <!-- Auditor Profile Card -->
+                <div class="profile-card" onclick="window.location.href='{% url 'accounts:login' %}?sso=1&ad_user=auditor'">
+                    <div class="profile-left">
+                        <div class="profile-avatar auditor">
+                            <i class="fas fa-user-check"></i>
+                        </div>
+                        <div class="profile-info">
+                            <div class="profile-name">Audit Inspector</div>
+                            <div class="profile-email">auditor@hdfcbank.com</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span class="profile-role auditor">Auditor</span>
+                        <button class="btn-authenticate">Sign In</button>
+                    </div>
+                </div>
+            </div>
+
+            <a href="{% url 'accounts:login' %}" class="back-link">
+                <i class="fas fa-arrow-left" style="margin-right: 6px;"></i> Back to standard login
+            </a>
+        </div>
+    </div>
+</body>
+</html>

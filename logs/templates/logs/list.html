@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Logs{% endblock %}
+{% block page_title %}Audit Logs{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2><i class="fas fa-file-alt" style="color: var(--primary); margin-right: 8px;"></i> Audit Logs</h2>
+        <div style="display: flex; gap: 16px; align-items: flex-end;">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <label style="font-weight: 600; font-size: 13px; color: #475569; margin: 0;">Level</label>
+                <select class="form-control" style="width: 150px; height: 38px; border-radius: 6px;" onchange="window.location.href='?level='+this.value+'&action={{ current_action }}'">
+                    <option value="">All Levels</option>
+                    <option value="info" {% if current_level == 'info' %}selected{% endif %}>Info</option>
+                    <option value="warning" {% if current_level == 'warning' %}selected{% endif %}>Warning</option>
+                    <option value="error" {% if current_level == 'error' %}selected{% endif %}>Error</option>
+                    <option value="success" {% if current_level == 'success' %}selected{% endif %}>Success</option>
+                </select>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <label style="font-weight: 600; font-size: 13px; color: #475569; margin: 0;">Action</label>
+                <select class="form-control" style="width: 250px; height: 38px; border-radius: 6px;" onchange="window.location.href='?level={{ current_level }}&action='+this.value">
+                    <option value="">All Actions</option>
+                    <option value="User Login" {% if current_action == 'User Login' %}selected{% endif %}>User Login</option>
+                    <option value="User Logout" {% if current_action == 'User Logout' %}selected{% endif %}>User Logout</option>
+                    <option value="User Created" {% if current_action == 'User Created' %}selected{% endif %}>User Created</option>
+                    <option value="Data Source Created" {% if current_action == 'Data Source Created' %}selected{% endif %}>Data Source Created</option>
+                    <option value="Mapping Created" {% if current_action == 'Mapping Created' %}selected{% endif %}>Mapping Created</option>
+                    <option value="Mapping Deleted" {% if current_action == 'Mapping Deleted' %}selected{% endif %}>Mapping Deleted</option>
+                    <option value="Validation Run" {% if current_action == 'Validation Run' %}selected{% endif %}>Validation Run</option>
+                    <option value="Validation Completed" {% if current_action == 'Validation Completed' %}selected{% endif %}>Validation Completed</option>
+                    <option value="Validation Failed" {% if current_action == 'Validation Failed' %}selected{% endif %}>Validation Failed</option>
+                    <option value="Workflow Created" {% if current_action == 'Workflow Created' %}selected{% endif %}>Workflow Created</option>
+                    <option value="Workflow Triggered" {% if current_action == 'Workflow Triggered' %}selected{% endif %}>Workflow Triggered</option>
+                    <option value="Workflow Deleted" {% if current_action == 'Workflow Deleted' %}selected{% endif %}>Workflow Deleted</option>
+                    <option value="Report Generated" {% if current_action == 'Report Generated' %}selected{% endif %}>Report Generated</option>
+                    <option value="Report Downloaded" {% if current_action == 'Report Downloaded' %}selected{% endif %}>Report Downloaded</option>
+                    <option value="Other" {% if current_action == 'Other' %}selected{% endif %}>Other</option>
+                </select>
+            </div>
+            <a href="?" class="btn btn-secondary" style="height: 38px; display: inline-flex; align-items: center; justify-content: center; background: #fff; border: 1px solid #CBD5E1; color: #1E293B; border-radius: 6px; padding: 0 16px; font-weight: 500; font-size: 14px; text-decoration: none;">Clear Filters</a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="log-viewer">
+            {% for log in logs %}
+            <div class="log-line">
+                <span class="log-time">{{ log.timestamp|date:"Y-m-d H:i:s" }}</span>
+                <span class="log-level {{ log.level }}">{{ log.level|upper }}</span>
+                <span class="log-message">
+                    {% if log.user %}[{{ log.user.username }}]{% endif %}
+                    {{ log.action }}
+                    {% if log.ip_address %}<span style="color: #64748B;"> ({{ log.ip_address }})</span>{% endif %}
+                </span>
+            </div>
+            {% empty %}
+            <div class="log-line">
+                <span class="log-message" style="color: #64748B;">No logs found.</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

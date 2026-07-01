@@ -1,0 +1,79 @@
+{% load static %}
+<!-- Sidebar Navigation -->
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <div class="brand-text">
+            <span class="brand-name" style="font-size: 1.6rem; font-weight: 800; color: var(--primary); letter-spacing: -0.5px;">QualiX</span>
+        </div>
+    </div>
+
+    <nav class="sidebar-nav">
+        <div class="nav-section">
+            <div class="nav-section-title">Main</div>
+            <a href="{% url 'dashboard:index' %}" class="nav-item {% if request.resolver_match.app_name == 'dashboard' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-th-large"></i></span>
+                Dashboard
+            </a>
+            <a href="{% url 'connections:list' %}" class="nav-item {% if request.resolver_match.app_name == 'connections' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-database"></i></span>
+                Connections
+            </a>
+            <a href="{% url 'mappings:list' %}" class="nav-item {% if request.resolver_match.app_name == 'mappings' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-project-diagram"></i></span>
+                Pipelines
+            </a>
+            {% if user_profile.role != 'auditor' %}
+            <a href="{% url 'workflows:list' %}" class="nav-item {% if request.resolver_match.app_name == 'workflows' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-clock"></i></span>
+                Workflows
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Reports & Logs</div>
+            <a href="{% url 'validations:list' %}" class="nav-item {% if request.resolver_match.app_name == 'validations' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-check-double"></i></span>
+                Monitor
+            </a>
+            <a href="{% url 'logs:list' %}" class="nav-item {% if request.resolver_match.app_name == 'logs' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-file-alt"></i></span>
+                Audit Logs
+            </a>
+        </div>
+
+        {% if user_profile.role == 'admin' %}
+        <div class="nav-section">
+            <div class="nav-section-title">Administration</div>
+            <a href="{% url 'accounts:add_user' %}" class="nav-item {% if request.resolver_match.url_name == 'add_user' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-user-plus"></i></span>
+                Add Users
+            </a>
+            <a href="{% url 'accounts:manage_users' %}" class="nav-item {% if request.resolver_match.url_name == 'manage_users' %}active{% endif %}">
+                <span class="nav-icon"><i class="fas fa-users-cog"></i></span>
+                Manage Users
+            </a>
+        </div>
+        {% endif %}
+    </nav>
+
+    <div class="sidebar-footer">
+        <div class="sidebar-user">
+            <div class="user-avatar">
+                {{ request.user.first_name|default:request.user.username|make_list|first|upper }}
+            </div>
+            <div class="user-info">
+                <div class="user-name">{{ request.user.get_full_name|default:request.user.username }}</div>
+                <div class="user-role">{{ user_profile.role|default:"User" }}</div>
+            </div>
+        </div>
+        <a href="{% url 'help_index' %}" class="nav-item {% if request.resolver_match.url_name == 'help_index' or request.resolver_match.url_name == 'help_category' %}active{% endif %}" style="margin-top: 8px;">
+            <span class="nav-icon"><i class="fas fa-question-circle"></i></span>
+            Help Center
+        </a>
+        <a href="{% url 'accounts:logout' %}" class="nav-item" style="margin-top: 8px; color: var(--accent);">
+            <span class="nav-icon"><i class="fas fa-sign-out-alt"></i></span>
+            Logout
+        </a>
+    </div>
+</aside>

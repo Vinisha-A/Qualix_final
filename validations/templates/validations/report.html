@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block title %}Report — Run {{ run.id }}{% endblock %}
+{% block page_title %}Validation Report{% endblock %}
+
+{% block content %}
+<!-- Summary -->
+<div class="card mb-24">
+    <div class="card-header">
+        <h2><i class="fas fa-file-alt" style="color: var(--primary); margin-right: 8px;"></i> Run {{ run.id }} — {{ run.mapping.name }}</h2>
+        <div class="d-flex gap-8">
+            <button class="btn btn-sm btn-primary" onclick="openSendEmailModal()">
+                <i class="fas fa-paper-plane"></i> Send Email
+            </button>
+            <button class="btn btn-sm btn-secondary" onclick="exportReport({{ run.id }}, 'excel')">
+                <i class="fas fa-file-excel"></i> Export Excel
+            </button>
+            <a href="{% url 'validations:list' %}" class="btn btn-sm btn-outline">
+                <i class="fas fa-arrow-left"></i> Back
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="report-summary mb-24">
+            <div class="report-metric">
+                <div class="metric-value">{{ run.total_checks }}</div>
+                <div class="metric-label">Total Checks</div>
+            </div>
+            <div class="report-metric pass">
+                <div class="metric-value">{{ run.passed_checks }}</div>
+                <div class="metric-label">Match</div>
+            </div>
+            <div class="report-metric fail">
+                <div class="metric-value">{{ run.failed_checks }}</div>
+                <div class="metric-label">Mismatch</div>
+            </div>
+            <div class="report-metric {% if run.pass_rate >= 90 %}pass{% elif run.pass_rate >= 70 %}{% else %}fail{% endif %}">
+                <div class="metric-value">{{ run.pass_rate }}%</div>
+                <div class="metric-label">Match Rate</div>
+            </div>
+        </div>
+
+        <div class="form-row mb-16">
+            <div>
+                <span class="text-muted">Status:</span>
+                <span class="badge badge-dot {% if run.status == 'completed' %}badge-success{% else %}badge-danger{% endif %}">
+                    {{ run.get_status_display }}
+                </span>
+            </div>
+            <div>
+                <span class="text-muted">Triggered By:</span>
+                <span class="fw-600">
+                    {% if run.triggered_by %}
+                        {{ run.triggered_by.get_full_name|default:run.triggered_by.username }}
+                    {% else %}
+                        System
+                    {% endif %}
+                </span>
+                ({{ run.get_trigger_type_display }})
+            </div>
+            <div>
+                <span class="text-muted">Started:</span>
+                <span>{{ run.started_at|date:"d M Y H:i:s"|default:"-" }}</span>
+            </div>
+            <div>
+                <span class="text-muted">Completed:</span>
+                <span>{{ run.completed_at|date:"d M Y H:i:s"|default:"-" }}</span>
+            </div>
+        </div>
+
+        {% if run.email_notifications.all %}
+        <div class="mb-16" style="padding-top: 12px; border-top: 1px dashed var(--border-light);">
+            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">
+                <i class="fas fa-envelope-open-text" style="color: var(--primary); margin-right: 6px;"></i> Email Delivery Logs
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                {% for email in run.email_notifications.all %}
+                <div style="display: flex; align-items: center; gap: 12px; font-size: 0.88rem; flex-wrap: wrap;">
+                    <span>Recipient: <strong style="color: var(--primary);">{{ email.recipient_email }}</strong></span>
+                    <span>Status:
+                        {% if email.sent_status == 'success' %}
+                            <span class="badge badge-success"><i class="fas fa-check-circle" style="margin-right: 4px;"></i>Sent</span>
+                        {% elif email.sent_status == 'failed' %}
+                            <span class="badge badge-danger" title="{{ email.error_message }}"><i class="fas fa-exclamation-circle" style="margin-right: 4px;"></i>Failed</span>
+                        {% else %}
+                            <span class="badge badge-warning"><i class="fas fa-clock" style="margin-right: 4px;"></i>Pending</span>
+                        {% endif %}
+                    </span>
+                    {% if email.sent_time %}
+                    <span style="color: var(--text-muted); font-size: 0.8rem;">at {{ email.sent_time|date:"d M Y H:i:s" }}</span>
+                    {% endif %}
+                    {% if email.error_message %}
+                    <span style="color: var(--danger); font-size: 0.8rem;">(Error: {{ email.error_message }})</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if run.error_message %}
+        <div class="alert alert-danger">
+            <strong>Error:</strong> {{ run.error_message }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Detailed Results -->
+<div class="card">
+    <div class="card-header">
+        <h2>Detailed Results</h2>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Table Name</th>
+                        <th>Column Name</th>
+                        <th>Source Validation Operation(operation choosen)</th>
+                        <th>Target Validation Operation (operation choosen)</th>
+                        <th>Result</th>
+                        <th>Difference</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for result in results %}
+                    <tr>
+                        <td class="fw-500">{{ run.mapping.source_table.upper }}</td>
+                        <td class="fw-500">{{ result.column_mapping.source_column }}</td>
+                        <td><strong class="text-primary">{{ result.source_op_display }}</strong></td>
+                        <td><strong class="text-primary">{{ result.target_op_display }}</strong></td>
+                        <td>
+                            {% if result.is_match %}
+                                <span class="badge badge-success">MATCH</span>
+                            {% else %}
+                                <span class="badge badge-danger">MISMATCH</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted">{{ result.difference }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted p-24">No results available.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Send Email Modal -->
+<div id="send-email-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5);">
+    <div style="background-color: var(--bg-card); margin: 15% auto; padding: 24px; border: 1px solid var(--border-medium); border-radius: var(--radius-lg); width: 80%; max-width: 450px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); position: relative;">
+        {% csrf_token %}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-light); padding-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 1.2rem; font-weight: 600; color: var(--text-primary);"><i class="fas fa-envelope" style="color: var(--primary); margin-right: 8px;"></i> Send Report Email</h3>
+            <span onclick="closeSendEmailModal()" style="font-size: 1.5rem; font-weight: bold; cursor: pointer; color: var(--text-muted);">&times;</span>
+        </div>
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label style="font-weight: 600; margin-bottom: 8px; display: block; color: var(--text-primary);">Recipient Email Address</label>
+            <input type="email" id="modal-recipient-email" class="form-control" placeholder="e.g., user@example.com" style="width: 100%;" required>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button class="btn btn-outline" onclick="closeSendEmailModal()">Cancel</button>
+            <button class="btn btn-primary" id="confirm-send-email-btn" onclick="sendReportEmail({{ run.id }})">
+                <i class="fas fa-paper-plane"></i> Send
+            </button>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+function openSendEmailModal() {
+    document.getElementById('send-email-modal').style.display = 'block';
+    document.getElementById('modal-recipient-email').value = '';
+    document.getElementById('modal-recipient-email').focus();
+}
+
+function closeSendEmailModal() {
+    document.getElementById('send-email-modal').style.display = 'none';
+}
+
+// Close modal when clicking outside of the modal content
+window.addEventListener('click', function(event) {
+    const modal = document.getElementById('send-email-modal');
+    if (event.target == modal) {
+        modal.style.display = 'none';
+    }
+});
+
+function sendReportEmail(runId) {
+    const emailInput = document.getElementById('modal-recipient-email');
+    const email = emailInput.value.trim();
+    if (!email) {
+        alert("Please enter a valid email address.");
+        return;
+    }
+
+    const btn = document.getElementById('confirm-send-email-btn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+
+    fetch(`/validations/api/send-email/${runId}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ email: email })
+    })
+    .then(response => response.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        if (data.success) {
+            closeSendEmailModal();
+            if (typeof showToast === 'function') {
+                showToast(data.message, 'success');
+            } else {
+                alert(data.message);
+            }
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            if (typeof showToast === 'function') {
+                showToast(data.error, 'error');
+            } else {
+                alert("Error: " + data.error);
+            }
+        }
+    })
+    .catch(error => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        console.error("Error sending email:", error);
+        alert("An error occurred while sending the email.");
+    });
+}
+</script>
+{% endblock %}
+{% endblock %}

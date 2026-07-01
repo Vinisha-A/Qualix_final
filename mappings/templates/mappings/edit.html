@@ -1,0 +1,449 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Pipeline | QualiX{% endblock %}
+{% block page_title %}Edit Pipeline{% endblock %}
+
+{% block content %}
+<form method="post" action="{% url 'mappings:edit' mapping.id %}" id="mapping-form">
+    {% csrf_token %}
+    <input type="hidden" name="column_mappings_json" id="column-mappings-json" value="[]">
+
+    <div class="card mb-24">
+        <div class="card-header">
+            <h2><i class="fas fa-project-diagram" style="color: var(--primary); margin-right: 8px;"></i> Pipeline Details</h2>
+        </div>
+        <div class="card-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Mapping Name *</label>
+                    <input type="text" name="name" class="form-control" placeholder="e.g., Daily Account Reconciliation" required>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" name="description" class="form-control" placeholder="Optional description" maxlength="1000">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Source & Target Panel -->
+    <div class="mapping-panel mb-24">
+        <!-- Source Panel -->
+        <div class="panel-source">
+            <div class="panel-header">
+                <i class="fas fa-database"></i> Source
+            </div>
+            <div class="panel-body">
+                <div class="form-group">
+                    <label>Connection *</label>
+                    <select name="source_connection" id="source-connection" class="form-control" required>
+                        <option value="">Select Source Connection</option>
+                        {% for conn in connections %}
+                        <option value="{{ conn.id }}" data-type="{{ conn.connection_type }}">{{ conn.name }} ({{ conn.get_connection_type_display }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" id="source-catalog-group" style="display: none;">
+                    <label>Catalog</label>
+                    <select name="source_catalog" id="source-catalog" class="form-control">
+                        <option value="">-- Select --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Schema</label>
+                    <select name="source_schema" id="source-schema" class="form-control">
+                        <option value="">-- Select --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Table *</label>
+                    <select name="source_table" id="source-table" class="form-control" required>
+                        <option value="">-- Select --</option>
+                    </select>
+                    <div id="source-table-preview-wrapper" style="margin-top: 8px; display: none;">
+                        <a href="#" id="source-table-preview-btn" class="btn btn-xs btn-outline" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; font-size: 0.75rem;">
+                            <i class="fas fa-eye"></i> Preview Source Data
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Arrow -->
+        <div class="panel-arrow">
+            <i class="fas fa-arrow-right"></i>
+        </div>
+
+        <!-- Target Panel -->
+        <div class="panel-target">
+            <div class="panel-header">
+                <i class="fas fa-bullseye"></i> Target
+            </div>
+            <div class="panel-body">
+                <div class="form-group">
+                    <label>Connection *</label>
+                    <select name="target_connection" id="target-connection" class="form-control" required>
+                        <option value="">Select Target Connection</option>
+                        {% for conn in connections %}
+                        <option value="{{ conn.id }}" data-type="{{ conn.connection_type }}">{{ conn.name }} ({{ conn.get_connection_type_display }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" id="target-catalog-group" style="display: none;">
+                    <label>Catalog</label>
+                    <select name="target_catalog" id="target-catalog" class="form-control">
+                        <option value="">-- Select --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Schema</label>
+                    <select name="target_schema" id="target-schema" class="form-control">
+                        <option value="">-- Select --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Table *</label>
+                    <select name="target_table" id="target-table" class="form-control" required>
+                        <option value="">-- Select --</option>
+                    </select>
+                    <div id="target-table-preview-wrapper" style="margin-top: 8px; display: none;">
+                        <a href="#" id="target-table-preview-btn" class="btn btn-xs btn-outline" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; font-size: 0.75rem;">
+                            <i class="fas fa-eye"></i> Preview Target Data
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Separate Column Selection Block -->
+    <div id="column-selection-section" class="card mb-24" style="display: none; box-shadow: none; border: 1.5px solid var(--border-light); background: var(--bg-card); border-radius: var(--radius-lg);">
+        <div class="card-body" style="padding: 20px;">
+            <div style="display: flex; align-items: center; gap: 24px; padding-bottom: 16px; border-bottom: 1px dashed var(--border-medium); margin-bottom: 16px; flex-wrap: wrap;">
+                <h3 style="font-size: 1.1rem; color: var(--primary); font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-columns"></i> Column Selection:
+                </h3>
+                <div style="display: flex; gap: 24px; align-items: center;">
+                    <label class="d-flex align-center gap-6" style="font-weight: 500; cursor: pointer; margin: 0; color: var(--text-primary);">
+                        <input type="radio" name="column_selection_mode" value="single" checked onchange="handleColumnModeChange()"> Single Column
+                    </label>
+                    <label class="d-flex align-center gap-6" style="font-weight: 500; cursor: pointer; margin: 0; color: var(--text-primary);">
+                        <input type="radio" name="column_selection_mode" value="multiple" onchange="handleColumnModeChange()"> Multiple Columns
+                    </label>
+                    <label class="d-flex align-center gap-6" style="font-weight: 500; cursor: pointer; margin: 0; color: var(--text-primary);">
+                        <input type="radio" name="column_selection_mode" value="all" onchange="handleColumnModeChange()"> All Columns
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Dynamic columns container based on type -->
+            <div id="columns-selection-container-grid" style="display: flex; gap: 24px; flex-wrap: wrap;">
+                <!-- Source Column Selection -->
+                <div id="source-column-section" style="flex: 1; min-width: 280px; display: none;">
+                    <!-- Single Column Selector -->
+                    <div id="source-single-column-wrapper" class="form-group mb-12">
+                        <label style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 0.9rem;">Source Column *</label>
+                        <select name="source_columns" id="source-column-select" class="form-control">
+                            <option value="">Select Column</option>
+                        </select>
+                        <div id="source-single-ops-container" style="margin-top: 12px; display: none;"></div>
+                    </div>
+
+                    <!-- Multiple Columns Selector Checklist -->
+                    <div id="source-multiple-columns-wrapper" class="form-group mb-12" style="display: none;">
+                        <label style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 0.9rem;">Select Source Columns *</label>
+                        <div id="source-columns-checkboxes-list" class="columns-checklist-container" style="max-height: 200px; overflow-y: auto; border: 1.5px solid var(--border-light); padding: 8px; border-radius: var(--radius-md); background: var(--bg-card);">
+                            <!-- Checkboxes and operations dropdowns populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Target Column Selection -->
+                <div id="target-column-section" style="flex: 1; min-width: 280px; display: none;">
+                    <!-- Single Column Selector -->
+                    <div id="target-single-column-wrapper" class="form-group mb-0">
+                        <label style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 0.9rem;">Target Column *</label>
+                        <select name="target_columns" id="target-column-select" class="form-control">
+                            <option value="">Select Column</option>
+                        </select>
+                        <div id="target-single-ops-container" style="margin-top: 12px; display: none;"></div>
+                    </div>
+
+                    <!-- Multiple Columns Selector Checklist -->
+                    <div id="target-multiple-columns-wrapper" class="form-group mb-0" style="display: none;">
+                        <label style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 0.9rem;">Select Target Columns *</label>
+                        <div id="target-columns-checkboxes-list" class="columns-checklist-container" style="max-height: 200px; overflow-y: auto; border: 1.5px solid var(--border-light); padding: 8px; border-radius: var(--radius-md); background: var(--bg-card);">
+                            <!-- Target checkboxes populated dynamically -->
+                        </div>
+                    </div>
+
+                    <div id="target-multiple-message" style="display: none; font-size: 0.85rem; color: var(--text-muted); font-style: italic; margin-top: 8px;">
+                        Select matching columns on both panels.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Central Validation Operations Section -->
+    <div id="validation-operations-section" class="card mb-24" style="display: none; box-shadow: none; border: 1.5px solid var(--border-light); background: var(--bg-card); border-radius: var(--radius-lg);">
+        <div class="card-header" style="background: var(--primary-subtle); border-bottom: 1.5px solid var(--border-light); padding: 16px 20px;">
+            <h3 style="font-size: 1.1rem; color: var(--primary); font-weight: 600; margin: 0;">
+                <i class="fas fa-tasks"></i> Validation Rules Configuration
+            </h3>
+        </div>
+        <div class="card-body" style="padding: 20px;">
+            <div id="validation-operations-container">
+                <div class="alert alert-info" style="padding: 10px 14px; font-size: 0.85rem; margin-bottom: 0;">Please select source columns to configure validations.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Separate Date Filter Settings -->
+    <div class="card mb-24 date-filter-section" style="box-shadow: none; border: 1.5px solid var(--border-light); background: var(--bg-card); border-radius: var(--radius-lg);">
+        <div class="card-header" style="background: var(--primary-subtle); border-bottom: 1.5px solid var(--border-light); padding: 16px 20px;">
+            <h3 style="font-size: 1.1rem; color: var(--primary); font-weight: 600; margin: 0;">
+                <i class="fas fa-calendar-alt"></i> Date Filters (Optional)
+            </h3>
+        </div>
+        <div class="card-body" style="padding: 20px;">
+            <div class="d-flex gap-24" style="flex-wrap: wrap;">
+                
+                <!-- Source Date Filter -->
+                <div class="filter-panel" style="flex: 1; min-width: 280px; background: var(--bg-input); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+                    <h4 style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary); border-bottom: 1px dashed var(--border-medium); padding-bottom: 8px; margin-top: 0; margin-bottom: 12px;">
+                        <i class="fas fa-database text-muted"></i> Source Table Filter
+                    </h4>
+                    <div class="form-group mb-12">
+                        <label style="font-weight: 500; font-size: 0.85rem;">Date Column</label>
+                        <select name="source_date_column" id="source-date-column" class="form-control">
+                            <option value="">-- Select Date Column --</option>
+                        </select>
+                    </div>
+                    <div class="form-group mb-12">
+                        <label class="d-flex align-center gap-6" style="font-weight: 500; font-size: 0.85rem; cursor: pointer; margin-bottom: 0;">
+                            <input type="checkbox" id="source-include-timestamp" onchange="toggleTimeFormat('source')"> Include Timestamp (24h)
+                        </label>
+                    </div>
+                    <div class="form-group mb-12">
+                        <label style="font-weight: 500; font-size: 0.85rem; display: block; margin-bottom: 6px;">Date Selection Type</label>
+                        <div style="display: flex; gap: 16px;">
+                            <label class="d-flex align-center gap-6" style="font-weight: 400; cursor: pointer;">
+                                <input type="radio" name="source_date_filter_type" value="specific" onchange="toggleDateFilterInputs('source', 'specific')"> Single Date
+                            </label>
+                            <label class="d-flex align-center gap-6" style="font-weight: 400; cursor: pointer;">
+                                <input type="radio" name="source_date_filter_type" value="range" checked onchange="toggleDateFilterInputs('source', 'range')"> Date Range
+                            </label>
+                        </div>
+                    </div>
+                    <div id="source-single-date-wrapper" style="display: none;">
+                        <div class="form-group mb-12">
+                            <label style="font-weight: 500; font-size: 0.85rem;">Comparison Operator</label>
+                            <select name="source_date_operator" id="source-date-operator" class="form-control">
+                                <option value=">">&gt;</option>
+                                <option value="<">&lt;</option>
+                                <option value=">=" selected>&gt;=</option>
+                                <option value="<=">&lt;=</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-12">
+                            <label style="font-weight: 500; font-size: 0.85rem;">Date</label>
+                            <input type="date" name="source_date_single" id="source-date-single" class="form-control">
+                        </div>
+                    </div>
+                    <div id="source-range-date-wrapper" style="display: none;" class="d-flex gap-12 flex-wrap">
+                        <div style="flex: 1; min-width: 120px;">
+                            <div class="form-group mb-12">
+                                <label style="font-weight: 500; font-size: 0.85rem;">From Operator</label>
+                                <select name="source_date_range_operator_start" id="source-date-range-operator-start" class="form-control">
+                                    <option value=">">&gt;</option>
+                                    <option value="<">&lt;</option>
+                                    <option value=">=" selected>&gt;=</option>
+                                    <option value="<=">&lt;=</option>
+                                </select>
+                            </div>
+                            <div class="form-group mb-0">
+                                <label style="font-weight: 500; font-size: 0.85rem;">From Date</label>
+                                <input type="date" name="source_date_filter_start" id="source-date-filter-start" class="form-control">
+                            </div>
+                        </div>
+                        <div style="flex: 1; min-width: 120px;">
+                            <div class="form-group mb-12">
+                                <label style="font-weight: 500; font-size: 0.85rem;">To Operator</label>
+                                <select name="source_date_range_operator_end" id="source-date-range-operator-end" class="form-control">
+                                    <option value=">">&gt;</option>
+                                    <option value="<">&lt;</option>
+                                    <option value=">=">&gt;=</option>
+                                    <option value="<=" selected>&lt;=</option>
+                                </select>
+                            </div>
+                            <div class="form-group mb-0">
+                                <label style="font-weight: 500; font-size: 0.85rem;">To Date</label>
+                                <input type="date" name="source_date_filter_end" id="source-date-filter-end" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Target Date Filter -->
+                <div class="filter-panel" style="flex: 1; min-width: 280px; background: var(--bg-input); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+                    <h4 style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary); border-bottom: 1px dashed var(--border-medium); padding-bottom: 8px; margin-top: 0; margin-bottom: 12px;">
+                        <i class="fas fa-bullseye text-muted"></i> Target Table Filter
+                    </h4>
+                    <div class="form-group mb-12">
+                        <label style="font-weight: 500; font-size: 0.85rem;">Date Column</label>
+                        <select name="target_date_column" id="target-date-column" class="form-control">
+                            <option value="">-- Select Date Column --</option>
+                        </select>
+                    </div>
+                    <div class="form-group mb-12">
+                        <label class="d-flex align-center gap-6" style="font-weight: 500; font-size: 0.85rem; cursor: pointer; margin-bottom: 0;">
+                            <input type="checkbox" id="target-include-timestamp" onchange="toggleTimeFormat('target')"> Include Timestamp (24h)
+                        </label>
+                    </div>
+                    <div class="form-group mb-12">
+                        <label style="font-weight: 500; font-size: 0.85rem; display: block; margin-bottom: 6px;">Date Selection Type</label>
+                        <div style="display: flex; gap: 16px;">
+                            <label class="d-flex align-center gap-6" style="font-weight: 400; cursor: pointer;">
+                                <input type="radio" name="target_date_filter_type" value="specific" onchange="toggleDateFilterInputs('target', 'specific')"> Single Date
+                            </label>
+                            <label class="d-flex align-center gap-6" style="font-weight: 400; cursor: pointer;">
+                                <input type="radio" name="target_date_filter_type" value="range" checked onchange="toggleDateFilterInputs('target', 'range')"> Date Range
+                            </label>
+                        </div>
+                    </div>
+                    <div id="target-single-date-wrapper" style="display: none;">
+                        <div class="form-group mb-12">
+                            <label style="font-weight: 500; font-size: 0.85rem;">Comparison Operator</label>
+                            <select name="target_date_operator" id="target-date-operator" class="form-control">
+                                <option value=">">&gt;</option>
+                                <option value="<">&lt;</option>
+                                <option value=">=" selected>&gt;=</option>
+                                <option value="<=">&lt;=</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-12">
+                            <label style="font-weight: 500; font-size: 0.85rem;">Date</label>
+                            <input type="date" name="target_date_single" id="target-date-single" class="form-control">
+                        </div>
+                    </div>
+                    <div id="target-range-date-wrapper" style="display: none;" class="d-flex gap-12 flex-wrap">
+                        <div style="flex: 1; min-width: 120px;">
+                            <div class="form-group mb-12">
+                                <label style="font-weight: 500; font-size: 0.85rem;">From Operator</label>
+                                <select name="target_date_range_operator_start" id="target-date-range-operator-start" class="form-control">
+                                    <option value=">">&gt;</option>
+                                    <option value="<">&lt;</option>
+                                    <option value=">=" selected>&gt;=</option>
+                                    <option value="<=">&lt;=</option>
+                                </select>
+                            </div>
+                            <div class="form-group mb-0">
+                                <label style="font-weight: 500; font-size: 0.85rem;">From Date</label>
+                                <input type="date" name="target_date_filter_start" id="target-date-filter-start" class="form-control">
+                            </div>
+                        </div>
+                        <div style="flex: 1; min-width: 120px;">
+                            <div class="form-group mb-12">
+                                <label style="font-weight: 500; font-size: 0.85rem;">To Operator</label>
+                                <select name="target_date_range_operator_end" id="target-date-range-operator-end" class="form-control">
+                                    <option value=">">&gt;</option>
+                                    <option value="<">&lt;</option>
+                                    <option value=">=">&gt;=</option>
+                                    <option value="<=" selected>&lt;=</option>
+                                </select>
+                            </div>
+                            <div class="form-group mb-0">
+                                <label style="font-weight: 500; font-size: 0.85rem;">To Date</label>
+                                <input type="date" name="target_date_filter_end" id="target-date-filter-end" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Submit -->
+    <div class="d-flex justify-end gap-12">
+        <input type="hidden" name="is_draft" id="is-draft-input" value="false">
+        <a href="{% url 'mappings:detail' mapping.id %}" class="btn btn-outline">Cancel</a>
+        <button type="submit" class="btn btn-primary btn-lg" onclick="document.getElementById('is-draft-input').value='false'; return prepareSubmit()">
+            <i class="fas fa-save"></i> Save Changes
+        </button>
+    </div>
+</form>
+
+{% block extra_js %}
+<script>
+window.isRestoringDraft = true;
+
+function toggleAllCheckboxes(selector, check = true) {
+    document.querySelectorAll(selector).forEach(cb => cb.checked = check);
+}
+
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const mappingData = JSON.parse('{{ mapping_json|escapejs }}');
+        await restoreMappingDraft(mappingData);
+        window.isRestoringDraft = false;
+    } catch (e) {
+        console.error("Failed to restore pipeline details", e);
+        showToast("Failed to restore pipeline details", "error");
+    }
+});
+
+function prepareSubmit() {
+    if (typeof validateDateFilters === 'function') {
+        if (!validateDateFilters()) {
+            return false;
+        }
+    }
+
+    const mode = typeof getColumnSelectionMode === 'function' ? getColumnSelectionMode() : 'single';
+
+    if (mode === 'single') {
+        const sourceSelect = document.getElementById('source-column-select');
+        const targetSelect = document.getElementById('target-column-select');
+        if (!sourceSelect || !targetSelect) return false;
+
+        const selectedSourceOptions = Array.from(sourceSelect.selectedOptions).filter(o => o.value !== '');
+        const selectedTargetOptions = Array.from(targetSelect.selectedOptions).filter(o => o.value !== '');
+
+        if (selectedSourceOptions.length === 0 || selectedTargetOptions.length === 0) {
+            showToast('Please select both source and target columns', 'warning');
+            return false;
+        }
+    } else if (mode === 'multiple') {
+        const checkedSource = document.querySelectorAll('.source-col-cb:checked');
+        const checkedTarget = document.querySelectorAll('.target-col-cb:checked');
+        if (checkedSource.length === 0 || checkedTarget.length === 0) {
+            showToast('Please select at least one column in both source and target', 'warning');
+            return false;
+        }
+    }
+
+    const jsonStr = getColumnMappingsJSON();
+    document.getElementById('column-mappings-json').value = jsonStr;
+
+    const mappings = JSON.parse(jsonStr);
+    if (mappings.length === 0) {
+        showToast('Please select at least one column pairing', 'warning');
+        return false;
+    }
+
+    const hasAll = mappings.some(m => m.source_column === '__all__');
+    if (!hasAll) {
+        const totalOps = mappings.reduce((sum, m) => sum + (m.operations || []).length, 0);
+        if (totalOps === 0) {
+            showToast('Please select at least one validation operation to run', 'warning');
+            return false;
+        }
+    }
+
+    return true;
+}
+</script>
+{% endblock %}
+{% endblock %}

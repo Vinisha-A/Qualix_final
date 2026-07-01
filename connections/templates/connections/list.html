@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Connections{% endblock %}
+{% block page_title %}Data Connections{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2><i class="fas fa-database" style="color: var(--primary); margin-right: 8px;"></i> Connections ({{ connections|length }})</h2>
+        {% if user_profile.role != 'auditor' %}
+        <a href="{% url 'connections:create' %}" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> New Connection
+        </a>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        <div class="table-container">
+            <table class="data-table" id="connections-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Host / File</th>
+                        <th>Database</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        {% if user_profile.role != 'auditor' %}
+                        <th>Actions</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for conn in connections %}
+                    <tr>
+                        <td class="fw-600">{{ conn.name }}</td>
+                        <td>
+                            <span class="badge {% if conn.connection_type == 'postgresql' %}badge-primary{% elif conn.connection_type == 'mysql' %}badge-info{% else %}badge-warning{% endif %}">
+                                {% if conn.connection_type == 'postgresql' %}<i class="fas fa-elephant"></i>
+                                {% elif conn.connection_type == 'mysql' %}<i class="fas fa-database"></i>
+                                {% else %}<i class="fas fa-file"></i>{% endif %}
+                                {{ conn.get_connection_type_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if conn.is_database %}
+                                {{ conn.host }}{% if conn.port %}:{{ conn.port }}{% endif %}
+                            {% else %}
+                                {{ conn.host|default:conn.file.name|default:"-" }}
+                            {% endif %}
+                        </td>
+                        <td>{{ conn.database_name|default:"-" }}</td>
+                        <td>
+                            {% if conn.last_test_success == True %}
+                                <span class="badge badge-success badge-dot" id="conn-status-{{ conn.id }}">Connected</span>
+                            {% elif conn.last_test_success == False %}
+                                <span class="badge badge-danger badge-dot" id="conn-status-{{ conn.id }}">Failed</span>
+                            {% else %}
+                                <span class="badge badge-muted badge-dot" id="conn-status-{{ conn.id }}">Not Tested</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ conn.created_at|date:"d M Y" }}</td>
+                        {% if user_profile.role != 'auditor' %}
+                        <td>
+                            <div class="d-flex gap-8">
+                                <button class="btn btn-sm btn-secondary" onclick="testConnection({{ conn.id }})">
+                                    <i class="fas fa-plug"></i> Test
+                                </button>
+                                <a href="{% url 'connections:edit' conn.id %}" class="btn btn-sm btn-secondary">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                                <form method="post" action="{% url 'connections:delete' conn.id %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline" onclick="return confirm('Delete this connection?')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7">
+                            <div class="empty-state">
+                                <div class="empty-icon"><i class="fas fa-database"></i></div>
+                                <h3>No Connections Yet</h3>
+                                <p>Add your first database or file connection to get started.</p>
+                                <a href="{% url 'connections:create' %}" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i> Add Connection
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

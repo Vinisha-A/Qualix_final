@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_edit %}Edit Connection{% else %}New Connection{% endif %}{% endblock %}
+{% block page_title %}{% if is_edit %}Edit Connection{% else %}Create Connection{% endif %}{% endblock %}
+
+{% block content %}
+<div class="content-grid single" style="max-width: 720px;">
+    <div class="card">
+        <div class="card-header">
+            <h2><i class="fas fa-plug" style="color: var(--primary); margin-right: 8px;"></i> {% if is_edit %}Edit Data Connection{% else %}New Data Connection{% endif %}</h2>
+            <a href="{% url 'connections:list' %}" class="btn btn-outline btn-sm">
+                <i class="fas fa-arrow-left"></i> Back
+            </a>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{% if is_edit %}{% url 'connections:edit' connection.id %}{% else %}{% url 'connections:create' %}{% endif %}" enctype="multipart/form-data" id="conn-form">
+                {% csrf_token %}
+
+                {% if not is_edit %}
+                <!-- Draft Restore Banner -->
+                <div id="draft-banner-connection_create" class="alert alert-info mb-16" style="display: none; justify-content: space-between; align-items: center; border-left: 4px solid var(--primary);">
+                    <span style="font-weight: 500;"><i class="fas fa-info-circle"></i> Unsaved draft loaded automatically.</span>
+                    <div class="d-flex gap-8">
+                        <button type="button" class="btn btn-xs btn-primary" id="resume-draft-btn-connection_create">Resume</button>
+                        <button type="button" class="btn btn-xs btn-outline" id="discard-draft-btn-connection_create" style="border-color: rgba(255,255,255,0.2);">Discard</button>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="id_name">Connection Name *</label>
+                        {{ form.name }}
+                    </div>
+                    <div class="form-group">
+                        <label for="id_connection_type">Type *</label>
+                        {{ form.connection_type }}
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="id_description">Description</label>
+                    {{ form.description }}
+                </div>
+
+                <!-- Database Fields -->
+                <div id="db-fields">
+                    <div class="form-row">
+                        <div class="form-group" id="group-host">
+                            <label for="id_host" id="label-host">Host *</label>
+                            {{ form.host }}
+                        </div>
+                        <div class="form-group" id="group-port">
+                            <label for="id_port" id="label-port">Port</label>
+                            {{ form.port }}
+                        </div>
+                    </div>
+                    <div class="form-group" id="group-database-name">
+                        <label for="id_database_name" id="label-database-name">Database *</label>
+                        {{ form.database_name }}
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" id="group-username">
+                            <label for="id_username" id="label-username">Username *</label>
+                            {{ form.username }}
+                        </div>
+                        <div class="form-group" id="group-password">
+                            <label for="id_password" id="label-password">Password *</label>
+                            {{ form.password }}
+                        </div>
+                    </div>
+                    <!-- Driver field — shown for Oracle and Lakehouse only -->
+                    <div class="form-group" id="group-driver" style="display: none;">
+                        <label for="id_driver" id="label-driver">Driver</label>
+                        {{ form.driver }}
+                        <div class="form-hint" id="hint-driver">e.g., <code>cx_Oracle</code>, <code>oracledb</code> for Oracle &nbsp;|&nbsp; <code>pyodbc</code>, <code>connector</code> for Lakehouse</div>
+                    </div>
+                </div>
+
+                <!-- File Fields -->
+                <div id="file-fields" style="display: none;">
+                    <div class="form-group">
+                        <label for="id_file" id="label-file">File Upload *</label>
+                        {{ form.file }}
+                        <div class="form-hint">Supported: CSV (.csv), Parquet (.parquet, .parq), Excel (.xlsx, .xls), Text (.txt)</div>
+                    </div>
+                </div>
+
+                <div class="card-footer" style="padding: 24px 0 0; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; gap: 12px;">
+                    <a href="{% url 'connections:list' %}" class="btn btn-outline">Cancel</a>
+                    {% if not is_edit %}
+                    <button type="button" class="btn btn-secondary" onclick="saveFormDraft('conn-form', 'connection_create')" style="background: #fff; border: 1px solid #CBD5E1; color: #1E293B;">
+                        <i class="fas fa-file-alt"></i> Save Draft
+                    </button>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> {% if is_edit %}Update Connection{% else %}Save Connection{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const typeSelect = document.getElementById('conn-type-select');
+    const dbFields = document.getElementById('db-fields');
+    const fileFields = document.getElementById('file-fields');
+
+    const labelHost = document.getElementById('label-host');
+    const labelPort = document.getElementById('label-port');
+    const groupHost = document.getElementById('group-host');
+    const groupPort = document.getElementById('group-port');
+    const labelDatabaseName = document.getElementById('label-database-name');
+    const groupDatabaseName = document.getElementById('group-database-name');
+    const labelUsername = document.getElementById('label-username');
+    const groupUsername = document.getElementById('group-username');
+    const labelPassword = document.getElementById('label-password');
+    const groupPassword = document.getElementById('group-password');
+    const groupDriver = document.getElementById('group-driver');
+    const labelFile = document.getElementById('label-file');
+
+    const hostInput = document.getElementById('id_host');
+    const portInput = document.getElementById('id_port');
+    const databaseNameInput = document.getElementById('id_database_name');
+    const usernameInput = document.getElementById('id_username');
+    const passwordInput = document.getElementById('id_password');
+    const driverInput = document.getElementById('id_driver');
+    const fileInput = document.getElementById('id_file');
+
+    function resetRequired() {
+        hostInput.removeAttribute('required');
+        portInput.removeAttribute('required');
+        databaseNameInput.removeAttribute('required');
+        usernameInput.removeAttribute('required');
+        passwordInput.removeAttribute('required');
+        fileInput.removeAttribute('required');
+    }
+
+    function showAllDbGroups() {
+        if (groupHost) groupHost.style.display = 'block';
+        if (groupPort) groupPort.style.display = 'block';
+        if (groupDatabaseName) groupDatabaseName.style.display = 'block';
+        if (groupUsername) groupUsername.style.display = 'block';
+        if (groupPassword) groupPassword.style.display = 'block';
+        if (groupDriver) groupDriver.style.display = 'none';
+    }
+
+    function toggleFields() {
+        const val = typeSelect.value;
+
+        resetRequired();
+        showAllDbGroups();
+
+        if (val === 'csv' || val === 'parquet' || val === 'excel' || val === 'text') {
+            dbFields.style.display = 'none';
+            fileFields.style.display = 'block';
+            {% if not is_edit or not connection.file %}
+            fileInput.setAttribute('required', 'required');
+            {% endif %}
+
+        } else if (val === 'databricks') {
+            dbFields.style.display = 'block';
+            fileFields.style.display = 'none';
+
+            if (groupPort) groupPort.style.display = 'none';
+            if (groupUsername) groupUsername.style.display = 'none';
+            if (groupDriver) groupDriver.style.display = 'none';
+
+            labelHost.textContent = 'Server Hostname *';
+            labelDatabaseName.textContent = 'HTTP Path *';
+            labelPassword.textContent = 'Access Token {% if not is_edit or not connection.encrypted_password %}*{% endif %}';
+
+            hostInput.placeholder = 'e.g., adb-123456789.azuredatabricks.net';
+            databaseNameInput.placeholder = 'e.g., sql/protocolv1/o/12345678/0000-1111-2222';
+            {% if is_edit and connection.encrypted_password %}
+            passwordInput.placeholder = 'Leave blank to keep current access token';
+            {% else %}
+            passwordInput.placeholder = 'Access Token';
+            {% endif %}
+
+            hostInput.setAttribute('required', 'required');
+            databaseNameInput.setAttribute('required', 'required');
+            {% if not is_edit or not connection.encrypted_password %}
+            passwordInput.setAttribute('required', 'required');
+            {% endif %}
+
+        } else if (val === 'oracle' || val === 'lakehouse') {
+            dbFields.style.display = 'block';
+            fileFields.style.display = 'none';
+
+            // Show driver field
+            if (groupDriver) groupDriver.style.display = 'block';
+
+            // Set labels
+            labelHost.textContent = 'Host *';
+            labelPort.textContent = 'Port';
+            labelDatabaseName.textContent = val === 'lakehouse' ? 'Database / Workspace *' : 'Service Name / SID *';
+            labelUsername.textContent = 'Username *';
+            labelPassword.textContent = 'Password {% if not is_edit or not connection.encrypted_password %}*{% endif %}';
+
+            // Placeholders
+            hostInput.placeholder = val === 'lakehouse' ? 'e.g., lakehouse-server.example.com' : 'e.g., oracle-db.hdfcbank.com';
+            databaseNameInput.placeholder = val === 'lakehouse' ? 'e.g., my_lakehouse_db' : 'e.g., ORCL or XE';
+            portInput.placeholder = val === 'lakehouse' ? '443' : '1521';
+            {% if is_edit and connection.encrypted_password %}
+            passwordInput.placeholder = 'Leave blank to keep current password';
+            {% else %}
+            passwordInput.placeholder = 'Database password';
+            {% endif %}
+            if (driverInput) {
+                driverInput.placeholder = val === 'lakehouse' ? 'e.g., pyodbc, connector' : 'e.g., cx_Oracle, oracledb';
+            }
+
+            // Required
+            hostInput.setAttribute('required', 'required');
+            databaseNameInput.setAttribute('required', 'required');
+            usernameInput.setAttribute('required', 'required');
+            {% if not is_edit or not connection.encrypted_password %}
+            passwordInput.setAttribute('required', 'required');
+            {% endif %}
+
+        } else if (val === 'postgresql' || val === 'mysql' || val === 'db2') {
+            dbFields.style.display = 'block';
+            fileFields.style.display = 'none';
+
+            labelHost.textContent = 'Host *';
+            labelPort.textContent = 'Port';
+            labelDatabaseName.textContent = 'Database *';
+            labelUsername.textContent = 'Username *';
+            labelPassword.textContent = 'Password {% if not is_edit or not connection.encrypted_password %}*{% endif %}';
+
+            hostInput.placeholder = 'e.g., db-server.hdfcbank.com';
+            databaseNameInput.placeholder = 'Database name';
+            {% if is_edit and connection.encrypted_password %}
+            passwordInput.placeholder = 'Leave blank to keep current password';
+            {% else %}
+            passwordInput.placeholder = 'Database password';
+            {% endif %}
+
+            if (val === 'postgresql') portInput.placeholder = '5432';
+            else if (val === 'mysql') portInput.placeholder = '3306';
+            else if (val === 'db2') portInput.placeholder = '50000';
+
+            hostInput.setAttribute('required', 'required');
+            databaseNameInput.setAttribute('required', 'required');
+            usernameInput.setAttribute('required', 'required');
+            {% if not is_edit or not connection.encrypted_password %}
+            passwordInput.setAttribute('required', 'required');
+            {% endif %}
+        } else {
+            dbFields.style.display = 'none';
+            fileFields.style.display = 'none';
+        }
+    }
+
+    typeSelect.addEventListener('change', toggleFields);
+    toggleFields();
+
+    {% if not is_edit %}
+    setupFormDraftManager('conn-form', 'connection_create');
+    {% endif %}
+});
+</script>
+{% endblock %}
+{% endblock %}

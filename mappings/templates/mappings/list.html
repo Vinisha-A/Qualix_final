@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Pipelines{% endblock %}
+{% block page_title %}Source-Target Pipelines{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2><i class="fas fa-project-diagram" style="color: var(--primary); margin-right: 8px;"></i> Pipelines ({{ mappings|length }})</h2>
+        {% if user_profile.role != 'auditor' %}
+        <a href="{% url 'mappings:create' %}" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> New Pipeline
+        </a>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Source</th>
+                        <th>Target</th>
+                        <th>Columns</th>
+                        <th>Date Filter</th>
+                        <th>Created By</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for mapping in mappings %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'mappings:detail' mapping.id %}" class="fw-600">{{ mapping.name }}</a>
+                            {% if mapping.is_draft %}
+                                <span class="badge badge-muted" style="margin-left: 6px; font-size: 0.7rem; background: #F1F5F9; border: 1px solid #CBD5E1; color: #475569;">Draft</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-500">{{ mapping.source_connection.name }}</div>
+                            <div class="text-muted" style="font-size:0.75rem;">{{ mapping.source_schema|default:"" }}{% if mapping.source_schema %}.{% endif %}{{ mapping.source_table }}</div>
+                        </td>
+                        <td>
+                            <div class="fw-500">{{ mapping.target_connection.name }}</div>
+                            <div class="text-muted" style="font-size:0.75rem;">{{ mapping.target_schema|default:"" }}{% if mapping.target_schema %}.{% endif %}{{ mapping.target_table }}</div>
+                        </td>
+                        <td><span class="badge badge-primary">{{ mapping.column_mappings.count }} cols</span></td>
+                        <td>
+                            {% if mapping.date_filter_type == 'none' %}
+                                <span class="text-muted">None</span>
+                            {% else %}
+                                <span class="badge badge-info">{{ mapping.get_date_filter_type_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ mapping.created_by.get_full_name|default:mapping.created_by.username }}</td>
+                        <td>
+                            <div class="d-flex gap-8">
+                                <a href="{% url 'mappings:detail' mapping.id %}" class="btn btn-sm btn-secondary" title="View Pipeline Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% if user_profile.role != 'auditor' %}
+                                <a href="{% url 'mappings:edit' mapping.id %}" class="btn btn-sm btn-outline" title="Edit Pipeline">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <button class="btn btn-sm btn-primary" onclick="triggerValidation({{ mapping.id }})">
+                                    <i class="fas fa-play"></i> Run
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7">
+                            <div class="empty-state">
+                                <div class="empty-icon"><i class="fas fa-project-diagram"></i></div>
+                                <h3>No Pipelines Yet</h3>
+                                <p>Create your first source-target pipeline to define validation rules.</p>
+                                {% if user_profile.role != 'auditor' %}
+                                <a href="{% url 'mappings:create' %}" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i> Create Pipeline
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

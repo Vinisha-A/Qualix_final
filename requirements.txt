@@ -1,0 +1,32 @@
+# Django Core
+Django>=4.2,<5.0
+django-extensions>=3.2
+
+# django-auth-ldap>=4.6
+# python-ldap>=3.4
+
+# Async Task Queue
+celery[redis]>=5.3
+django-celery-beat>=2.5
+django-celery-results>=2.5
+redis>=5.0
+
+# Database Drivers
+sqlalchemy>=2.0
+psycopg2-binary>=2.9
+pymysql>=1.1
+
+# Data Processing
+pandas>=2.1
+pyarrow>=14.0
+openpyxl>=3.1
+
+# Security
+cryptography>=41.0
+python-dotenv>=1.0
+
+# Static Files
+whitenoise>=6.5
+
+# Utilities
+python-dateutil>=2.8

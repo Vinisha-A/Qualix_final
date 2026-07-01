@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django files
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+runtime_logs/
+logs/*.log
+
+# Environments and Secrets
+.env
+.venv
+venv/
+ENV/
+env/
+
+# IDEs and OS files
+.idea/
+.vscode/
+.agents/
+.gemini/
+*.swp
+Thumbs.db
+Desktop.ini

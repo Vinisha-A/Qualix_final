@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} — {{ table }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+        <h2>
+            <i class="fas fa-table" style="color: var(--primary); margin-right: 8px;"></i>
+            Preview: <span style="font-family: monospace; font-weight: 700; color: var(--primary);">{{ table }}</span>
+        </h2>
+        {% if not error %}
+        <span class="badge badge-primary" style="font-size: 0.85rem; padding: 6px 12px; font-weight: 600;">
+            {% if total_records > 0 %}
+                {% if offset > 0 %}
+                    Showing records {{ offset }} to {{ offset_end }}
+                {% else %}
+                    Showing records 1 to {{ total_records }}
+                {% endif %}
+            {% else %}
+                No records found
+            {% endif %}
+        </span>
+        {% endif %}
+    </div>
+    <div class="card-body" style="padding: 20px;">
+        <div style="margin-bottom: 20px; font-size: 0.9rem; color: var(--text-secondary); background: var(--bg-body); padding: 12px 16px; border-radius: var(--radius-md); border-left: 4px solid var(--primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div>
+                <strong>Connection:</strong> <span style="color: var(--text-primary); font-weight: 600;">{{ connection.name }}</span> 
+                <span style="color: var(--text-muted); font-size: 0.8rem; margin-left: 8px;">({{ connection.get_connection_type_display }})</span>
+            </div>
+            <div>
+                <strong>Table:</strong> <span style="font-family: monospace; color: var(--text-primary); font-weight: 600;">{{ table }}</span>
+            </div>
+        </div>
+
+        {% if not error %}
+        <div style="margin-bottom: 20px; padding: 16px 20px; border-radius: var(--radius-md); background: var(--bg-card); border: 1.5px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; box-shadow: var(--shadow-sm);">
+            <form method="get" action="" style="display: flex; align-items: center; gap: 12px; margin: 0; width: 100%; justify-content: space-between; flex-wrap: wrap;">
+                <input type="hidden" name="connection_id" value="{{ connection.id }}">
+                <input type="hidden" name="schema" value="{{ schema }}">
+                <input type="hidden" name="table" value="{{ table }}">
+                <input type="hidden" name="catalog" value="{{ catalog }}">
+                
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <label for="offset-input" style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-list-ol" style="color: var(--primary);"></i> Start Record (Offset):
+                    </label>
+                    <input type="number" id="offset-input" name="offset" value="{{ offset|default:0 }}" min="0" style="padding: 8px 12px; border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); font-size: 0.9rem; background: var(--bg-input); color: var(--text-primary); width: 140px; font-weight: 600;" placeholder="0">
+                    <button type="submit" class="btn btn-primary" style="padding: 8px 16px; font-size: 0.9rem; font-weight: 600; display: flex; align-items: center; gap: 6px; border-radius: var(--radius-md);">
+                        <i class="fas fa-filter"></i> Apply Filter
+                    </button>
+                </div>
+                
+                <div style="color: var(--text-secondary); font-size: 0.85rem; font-weight: 500;">
+                    {% if total_records > 0 %}
+                        {% if offset > 0 %}
+                            Showing records <strong style="color: var(--primary);">{{ offset }}</strong> to <strong style="color: var(--primary);">{{ offset_end }}</strong>
+                        {% else %}
+                            Showing records <strong style="color: var(--primary);">1</strong> to <strong style="color: var(--primary);">{{ total_records }}</strong>
+                        {% endif %}
+                    {% else %}
+                        No records found
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+        {% endif %}
+
+        {% if error %}
+        <div class="alert alert-danger" style="margin-bottom: 0; padding: 16px 20px; border-radius: var(--radius-md); font-weight: 500;">
+            <i class="fas fa-exclamation-triangle" style="margin-right: 8px; font-size: 1.1rem;"></i> {{ error }}
+        </div>
+        {% else %}
+        <div class="table-container" style="overflow-x: auto; max-height: 600px; border: 1px solid var(--border-light); border-radius: var(--radius-md); box-shadow: var(--shadow-xs);">
+            <table class="data-table" style="width: 100%; border-collapse: separate; border-spacing: 0;">
+                <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10;">
+                    <tr>
+                        <th style="width: 60px; text-align: center; border-bottom: 2.5px solid var(--border-medium); border-right: 1px solid var(--border-light); background: var(--primary-subtle); color: var(--primary); font-weight: 700; padding: 12px 8px;">#</th>
+                        {% for col in columns %}
+                        <th style="border-bottom: 2.5px solid var(--border-medium); border-right: 1px solid var(--border-light); text-align: left; padding: 12px 16px; font-weight: 600; color: var(--text-primary); background: var(--bg-input);">{{ col }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr style="border-bottom: 1px solid var(--border-light); transition: background-color var(--transition-fast);" onmouseover="this.style.backgroundColor='var(--bg-hover)'" onmouseout="this.style.backgroundColor='transparent'">
+                        <td style="text-align: center; font-weight: 600; color: var(--text-muted); background: var(--primary-subtle); border-right: 1px solid var(--border-light); border-bottom: 1px solid var(--border-light); padding: 10px 8px;">
+                            {% if offset > 0 %}
+                                {{ offset|add:forloop.counter0 }}
+                            {% else %}
+                                {{ forloop.counter }}
+                            {% endif %}
+                        </td>
+                        {% for val in row %}
+                        <td style="padding: 10px 16px; font-size: 0.85rem; color: var(--text-primary); white-space: nowrap; border-right: 1px solid var(--border-light); border-bottom: 1px solid var(--border-light);">{{ val }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

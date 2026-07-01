@@ -1,0 +1,269 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Login to HDFC QualiX">
+    <title>Login | QualiX - HDFC Bank</title>
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+    <link rel="stylesheet" href="{% static 'css/main.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* Extra inline styling to ensure pixel-perfect match to the user's reference mockup */
+        .login-card {
+            border-radius: 30px !important;
+            padding: 40px !important;
+            box-shadow: 0 15px 35px rgba(0, 76, 143, 0.1) !important;
+            max-width: 420px !important;
+            width: 100% !important;
+            border: none !important;
+            background: #ffffff !important;
+        }
+
+        .login-logo img {
+            width: 200px !important;
+            /* Make it bigger */
+            height: auto !important;
+            margin-bottom: 20px !important;
+            display: block !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+        }
+
+        .login-brand-title {
+            color: #004c8f !important;
+            font-size: 2.8rem !important;
+            font-weight: 800 !important;
+            margin: 0 !important;
+            letter-spacing: -0.5px !important;
+            font-family: 'Outfit', 'Inter', sans-serif !important;
+            text-align: center !important;
+        }
+
+        .login-brand-subtitle {
+            color: #718096 !important;
+            font-size: 1rem !important;
+            font-weight: 500 !important;
+            margin-top: 5px !important;
+            margin-bottom: 30px !important;
+            text-align: center !important;
+        }
+
+        .form-group label {
+            font-weight: 700 !important;
+            color: #004c8f !important;
+            margin-bottom: 8px !important;
+            display: block !important;
+        }
+
+        .password-wrapper {
+            position: relative !important;
+            width: 100% !important;
+        }
+
+        .password-toggle-btn {
+            position: absolute !important;
+            right: 15px !important;
+            top: 50% !important;
+            transform: translateY(-50%) !important;
+            cursor: pointer !important;
+            color: #004c8f !important;
+            opacity: 0.7 !important;
+            z-index: 10 !important;
+            font-size: 1.1rem !important;
+        }
+
+        .password-toggle-btn:hover {
+            opacity: 1 !important;
+        }
+
+        .btn-login-red {
+            background: #ed232a !important;
+            color: #ffffff !important;
+            font-weight: 700 !important;
+            font-size: 1.1rem !important;
+            padding: 14px 24px !important;
+            border-radius: 12px !important;
+            border: none !important;
+            width: 100% !important;
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+            margin-top: 10px !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            box-shadow: 0 4px 12px rgba(237, 35, 42, 0.2) !important;
+        }
+
+        .btn-login-red:hover {
+            background: #d11b22 !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 6px 16px rgba(237, 35, 42, 0.3) !important;
+        }
+
+        .btn-login-red:active {
+            transform: translateY(0) !important;
+        }
+
+        .forgot-password-link-center {
+            text-align: center !important;
+            display: block !important;
+            margin-top: 20px !important;
+            color: #004c8f !important;
+            font-weight: 600 !important;
+            text-decoration: none !important;
+            transition: color 0.2s ease !important;
+            font-size: 0.95rem !important;
+        }
+
+        .forgot-password-link-center:hover {
+            color: #ed232a !important;
+            text-decoration: underline !important;
+        }
+
+        /* Custom SSO Style matching the theme */
+        .sso-section {
+            margin-top: 25px !important;
+            border-top: 1px solid #e2e8f0 !important;
+            padding-top: 20px !important;
+            text-align: center !important;
+        }
+
+        .btn-sso-blue {
+            background: #e8f0fe !important;
+            color: #004c8f !important;
+            font-weight: 600 !important;
+            font-size: 0.95rem !important;
+            padding: 12px 20px !important;
+            border-radius: 10px !important;
+            border: 1px solid rgba(0, 76, 143, 0.15) !important;
+            width: 100% !important;
+            cursor: pointer !important;
+            transition: all 0.2s ease !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 8px !important;
+        }
+
+        .btn-sso-blue:hover {
+            background: #d8e6fd !important;
+            color: #003b70 !important;
+            transform: translateY(-1px) !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="login-page">
+        <div class="login-container">
+            <div class="login-card">
+                <!-- HDFC Bank Logo -->
+                <div class="login-logo">
+                    <img src="{% static 'images/hdfc_logo.png' %}" alt="HDFC Bank">
+                    <h1 class="login-brand-title">QualiX</h1>
+                    <p class="login-brand-subtitle">Quality in Every Byte</p>
+                </div>
+
+                <!-- Messages -->
+                {% if messages %}
+                {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}" data-auto-dismiss="5000">
+                    {{ message }}
+                </div>
+                {% endfor %}
+                {% endif %}
+
+                {% if form.non_field_errors %}
+                {% for error in form.non_field_errors %}
+                <div class="alert alert-danger">{{ error }}</div>
+                {% endfor %}
+                {% endif %}
+
+                <!-- Login Form -->
+                <form method="post" action="{% url 'accounts:login' %}" id="login-form">
+                    {% csrf_token %}
+
+                    <div class="form-group">
+                        <label for="login-username">Username</label>
+                        <input type="text" name="username" id="login-username" class="form-control"
+                            placeholder="Enter username" required autocomplete="off" value="">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="id_password">Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" name="password" id="id_password" class="form-control"
+                                placeholder="Enter password" required autocomplete="new-password"
+                                style="padding-right: 45px;" value="">
+                            <span class="password-toggle-btn" id="password-toggle-trigger">
+                                <i class="fas fa-eye" id="password-toggle-eye"></i>
+                            </span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-login-red">
+                        Login
+                    </button>
+
+                    <!-- Forgot Password Link - dynamic visibility -->
+                    <a href="{% url 'accounts:forgot_password' %}" class="forgot-password-link-center hidden"
+                        id="forgot-password-link">
+                        Forgot Password?
+                    </a>
+                </form>
+
+                <!-- SSO Login Section -->
+                <div class="sso-section">
+                    <button type="button" class="btn-sso-blue"
+                        onclick="window.location.href='{% url 'accounts:login' %}?sso=1'">
+                        <i class="fas fa-shield-alt"></i>
+                        Sign in with SSO (Active Directory)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password visibility toggle and load clearing script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const passwordInput = document.getElementById('id_password');
+            const toggleTrigger = document.getElementById('password-toggle-trigger');
+            const toggleEye = document.getElementById('password-toggle-eye');
+
+            if (toggleTrigger && passwordInput && toggleEye) {
+                toggleTrigger.addEventListener('click', function () {
+                    const isPassword = passwordInput.getAttribute('type') === 'password';
+                    passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
+                    toggleEye.className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
+                });
+            }
+
+            // Clear inputs on page load/reload to prevent browser persistence
+            const usernameInput = document.getElementById('login-username');
+            const forgotPasswordLink = document.getElementById('forgot-password-link');
+            if (usernameInput) usernameInput.value = '';
+            if (passwordInput) passwordInput.value = '';
+            if (forgotPasswordLink) forgotPasswordLink.classList.add('hidden');
+
+            // Mouse Parallax Effect for floating background logos
+            document.addEventListener('mousemove', function (e) {
+                const x = (window.innerWidth / 2 - e.clientX) / 45;
+                const y = (window.innerHeight / 2 - e.clientY) / 45;
+
+                document.querySelectorAll('.floating-logo').forEach(el => {
+                    const depth = parseFloat(el.getAttribute('data-depth')) || 0.5;
+                    const moveX = x * depth;
+                    const moveY = y * depth;
+                    el.style.transform = `translate3d(${moveX}px, ${moveY}px, 0)`;
+                });
+            });
+        });
+    </script>
+    <script src="{% static 'js/main.js' %}"></script>
+</body>
+
+</html>
