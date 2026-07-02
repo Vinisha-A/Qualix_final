@@ -31,6 +31,7 @@ def execute_workflow_task(self, workflow_id, trigger_source='scheduled'):
         # Create validation run
         run = ValidationRun.objects.create(
             mapping=workflow.mapping,
+            workflow=workflow,
             trigger_type=trigger_source,
             status='pending',
             selected_columns=workflow.selected_columns,
@@ -323,6 +324,7 @@ def _run_polling_in_thread(workflow_id, poll_start_epoch):
                     from validations.engine import ValidationEngine
                     run = ValidationRun.objects.create(
                         mapping=workflow.mapping,
+                        workflow=workflow,
                         trigger_type='db_trigger',
                         status='pending',
                         selected_columns=workflow.selected_columns,

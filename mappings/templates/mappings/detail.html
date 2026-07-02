@@ -33,6 +33,9 @@
                 <div class="panel-body">
                     <p><strong>Connection:</strong> {{ mapping.source_connection.name }}</p>
                     <p><strong>Type:</strong> {{ mapping.source_connection.get_connection_type_display }}</p>
+                    {% if mapping.source_connection.connection_type == 'databricks' and mapping.source_catalog %}
+                    <p><strong>Catalog:</strong> {{ mapping.source_catalog }}</p>
+                    {% endif %}
                     <p><strong>Schema:</strong> {{ mapping.source_schema|default:"N/A" }}</p>
                     <p><strong>Table:</strong> {{ mapping.source_table }}</p>
                 </div>
@@ -43,6 +46,9 @@
                 <div class="panel-body">
                     <p><strong>Connection:</strong> {{ mapping.target_connection.name }}</p>
                     <p><strong>Type:</strong> {{ mapping.target_connection.get_connection_type_display }}</p>
+                    {% if mapping.target_connection.connection_type == 'databricks' and mapping.target_catalog %}
+                    <p><strong>Catalog:</strong> {{ mapping.target_catalog }}</p>
+                    {% endif %}
                     <p><strong>Schema:</strong> {{ mapping.target_schema|default:"N/A" }}</p>
                     <p><strong>Table:</strong> {{ mapping.target_table }}</p>
                 </div>
@@ -95,7 +101,7 @@
 </div>
 
 <!-- Column Mappings -->
-<div class="card">
+<div class="card mb-24">
     <div class="card-header">
         <h2>Column Pipelines ({{ column_mappings|length }})</h2>
     </div>
@@ -129,6 +135,92 @@
                     {% empty %}
                     <tr>
                         <td colspan="6" class="text-center text-muted p-24">No column mappings defined.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Monitor Run History -->
+<div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h2><i class="fas fa-history" style="color: var(--primary); margin-right: 8px;"></i> Monitor Run History</h2>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>No.</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Match / Mismatch</th>
+                        <th>Triggered By</th>
+                        <th>Type</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in runs %}
+                    <tr>
+                        <td class="fw-600">{{ forloop.revcounter }}</td>
+                        <td>
+                            <span class="badge badge-dot {% if run.status == 'completed' %}badge-success{% elif run.status == 'failed' %}badge-danger{% elif run.status == 'running' %}badge-warning{% else %}badge-muted{% endif %}"
+                                  id="status-badge-{{ run.id }}">
+                                {{ run.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="progress-bar" style="width: 100px;">
+                                <div class="progress-fill" id="progress-fill-{{ run.id }}" style="width: {{ run.progress }}%;"></div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="text-success fw-600">{{ run.passed_checks }}</span> /
+                            <span class="text-danger fw-600">{{ run.failed_checks }}</span>
+                            <span class="text-muted">({{ run.total_checks }})</span>
+                        </td>
+                        <td>
+                            {% if run.triggered_by %}
+                                {{ run.triggered_by.get_full_name|default:run.triggered_by.username }}
+                            {% else %}
+                                System
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge {% if run.trigger_type == 'manual' %}badge-info{% else %}badge-primary{% endif %}">
+                                {{ run.get_trigger_type_display }}
+                            </span>
+                        </td>
+                        <td>{{ run.created_at|date:"d M Y H:i" }}</td>
+                        <td>
+                            <div class="d-flex gap-8" style="align-items: center;">
+                                {% if run.status == 'completed' or run.status == 'failed' %}
+                                <a href="{% url 'validations:report' run.id %}" class="btn btn-sm btn-secondary">
+                                    <i class="fas fa-file-alt"></i> Report
+                                </a>
+                                {% elif run.status == 'running' %}
+                                <a href="{% url 'validations:progress' run.id %}" class="btn btn-sm btn-warning">
+                                    <i class="fas fa-spinner fa-spin"></i> Progress
+                                </a>
+                                {% endif %}
+                                {% if user_profile.role != 'auditor' %}
+                                <form method="post" action="{% url 'validations:delete' run.id %}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete Validation Run {{ run.id }}?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-danger" style="background-color: var(--danger); border-color: var(--danger); color: white; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted p-24">No validation runs recorded for this pipeline yet.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

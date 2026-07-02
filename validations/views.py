@@ -16,24 +16,36 @@ logger = logging.getLogger('validations')
 @login_required
 def validation_list_view(request):
     """List all validation runs."""
+    from django.core.paginator import Paginator
+
     query = request.GET.get('query', '').strip()
     status_filter = request.GET.get('status', '').strip()
     type_filter = request.GET.get('type', '').strip()
     date_filter = request.GET.get('date', '').strip()
 
-    runs = ValidationRun.objects.select_related('mapping', 'triggered_by').all()
+    runs_qs = ValidationRun.objects.select_related('mapping', 'triggered_by').all()
     if query:
-        runs = runs.filter(mapping__name__icontains=query)
+        runs_qs = runs_qs.filter(mapping__name__icontains=query)
     if status_filter:
-        runs = runs.filter(status=status_filter)
+        runs_qs = runs_qs.filter(status=status_filter)
     if type_filter:
-        runs = runs.filter(trigger_type=type_filter)
+        runs_qs = runs_qs.filter(trigger_type=type_filter)
     if date_filter:
-        runs = runs.filter(created_at__date=date_filter)
+        runs_qs = runs_qs.filter(created_at__date=date_filter)
 
-    runs = runs[:50]
+    paginator = Paginator(runs_qs, 100)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Attach reverse index to each item in current page to display global numbering
+    start_index = paginator.count - (page_obj.start_index() - 1)
+    for i, run in enumerate(page_obj.object_list):
+        run.rev_index = start_index - i
+
     return render(request, 'validations/list.html', {
-        'runs': runs,
+        'runs': page_obj,
+        'page_obj': page_obj,
+        'paginator': paginator,
         'query': query,
         'status_filter': status_filter,
         'type_filter': type_filter,
@@ -59,6 +71,8 @@ def validation_report_view(request, run_id):
 def validation_progress_view(request, run_id):
     """View validation progress (for active runs)."""
     run = get_object_or_404(ValidationRun, id=run_id)
+    if run.status in ('completed', 'failed'):
+        return redirect('validations:report', run_id=run.id)
     return render(request, 'validations/progress.html', {'run': run})
 
 
@@ -264,9 +278,11 @@ def quick_validate_view(request):
     if request.method == 'POST':
         try:
             source_conn_id = request.POST.get('source_connection')
+            source_catalog = request.POST.get('source_catalog', '')
             source_schema = request.POST.get('source_schema', '')
             source_table = request.POST.get('source_table', '')
             target_conn_id = request.POST.get('target_connection')
+            target_catalog = request.POST.get('target_catalog', '')
             target_schema = request.POST.get('target_schema', '')
             target_table = request.POST.get('target_table', '')
             
@@ -329,9 +345,11 @@ def quick_validate_view(request):
                 'name': quick_name,
                 'description': "Triggered from Dashboard Quick Workspace",
                 'source_connection_id': source_conn_id,
+                'source_catalog': source_catalog,
                 'source_schema': source_schema,
                 'source_table': source_table,
                 'target_connection_id': target_conn_id,
+                'target_catalog': target_catalog,
                 'target_schema': target_schema,
                 'target_table': target_table,
                 'created_by': request.user,
@@ -420,8 +438,8 @@ def quick_validate_view(request):
                 source_engine = ConnectorEngine(source_conn)
                 target_engine = ConnectorEngine(target_conn)
                 
-                src_all_cols = source_engine.get_columns(source_schema if source_schema != 'file' else None, source_table)
-                tgt_all_cols = target_engine.get_columns(target_schema if target_schema != 'file' else None, target_table)
+                src_all_cols = source_engine.get_columns(source_schema if source_schema != 'file' else None, source_table, catalog=source_catalog or None)
+                tgt_all_cols = target_engine.get_columns(target_schema if target_schema != 'file' else None, target_table, catalog=target_catalog or None)
                 
                 expanded_columns = []
                 for s_col in src_all_cols:
@@ -573,4 +591,44 @@ def validation_delete_view(request, run_id):
     if referer and 'report' not in referer and 'progress' not in referer:
         return redirect(referer)
     return redirect('validations:list')
+
+
+@login_required
+@contributor_or_admin_required
+@require_POST
+def api_send_report_email(request, run_id):
+    """AJAX: Send validation report to a manually specified email."""
+    if hasattr(request.user, 'profile') and request.user.profile.role == 'auditor':
+        return JsonResponse({'success': False, 'error': 'Permission denied: Auditors cannot trigger emails.'}, status=403)
+        
+    import json
+    email = None
+    if request.content_type == 'application/json':
+        try:
+            body = json.loads(request.body)
+            email = body.get('email', '').strip()
+        except Exception:
+            pass
+    else:
+        email = request.POST.get('email', '').strip()
+
+    if not email:
+        return JsonResponse({'success': False, 'error': 'Email address is required.'}, status=400)
+
+    if '@' not in email:
+        return JsonResponse({'success': False, 'error': 'Invalid email address format.'}, status=400)
+
+    run = get_object_or_404(ValidationRun, id=run_id)
+    
+    try:
+        from notifications.email_service import send_validation_email
+        notification = send_validation_email(run, recipient_email=email)
+        if notification and notification.sent_status == 'success':
+            return JsonResponse({'success': True, 'message': f'Report email successfully sent to {email}'})
+        else:
+            err = notification.error_message if notification else 'Unknown error'
+            return JsonResponse({'success': False, 'error': f'Failed to send email: {err}'})
+    except Exception as e:
+        logger.error(f"Error sending manual email: {e}")
+        return JsonResponse({'success': False, 'error': f'Server error: {str(e)}'}, status=500)
 

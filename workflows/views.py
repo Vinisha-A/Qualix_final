@@ -68,6 +68,7 @@ def workflow_create_view(request):
                 poll_duration_hours=poll_duration_hours,
                 trigger_status='idle',
                 selected_columns=selected_columns_str,
+                recipient_email=request.POST.get('recipient_email', '').strip() or None,
                 created_by=request.user,
             )
 
@@ -108,6 +109,100 @@ def workflow_detail_view(request, workflow_id):
         Workflow.objects.select_related('mapping', 'created_by'), id=workflow_id
     )
     return render(request, 'workflows/detail.html', {'workflow': workflow})
+
+
+@login_required
+@contributor_or_admin_required
+def workflow_edit_view(request, workflow_id):
+    """Edit an existing workflow."""
+    workflow = get_object_or_404(Workflow, id=workflow_id)
+    mappings = Mapping.objects.filter(is_active=True)
+
+    if request.method == 'POST':
+        try:
+            schedule_type = request.POST.get('schedule_type', 'manual')
+            selected_cols = request.POST.getlist('selected_columns')
+            selected_columns_str = ",".join(selected_cols)
+
+            # ── DB Trigger fields ─────────────────────────────────────────────
+            trigger_name = ''
+            trigger_scheduled_time = None
+            poll_duration_hours = 3
+
+            if schedule_type == 'db_trigger':
+                trigger_name = request.POST.get('trigger_name', '').strip()
+                trigger_scheduled_time = request.POST.get('trigger_scheduled_time') or None
+                try:
+                    poll_duration_hours = int(request.POST.get('poll_duration_hours', 3))
+                    if poll_duration_hours < 1:
+                        poll_duration_hours = 1
+                except (ValueError, TypeError):
+                    poll_duration_hours = 3
+
+                if not trigger_name:
+                    messages.error(request, 'Trigger Name is required for DB Trigger schedule.')
+                    return render(request, 'workflows/edit.html', {
+                        'workflow': workflow, 'mappings': mappings, 'is_edit': True
+                    })
+                if not trigger_scheduled_time:
+                    messages.error(request, 'Scheduled Time is required for DB Trigger schedule.')
+                    return render(request, 'workflows/edit.html', {
+                        'workflow': workflow, 'mappings': mappings, 'is_edit': True
+                    })
+
+            workflow.name = request.POST.get('name', '').strip()
+            workflow.description = request.POST.get('description', '')
+            workflow.mapping_id = request.POST.get('mapping')
+            workflow.schedule_type = schedule_type
+            workflow.schedule_time = request.POST.get('schedule_time') or None
+            workflow.schedule_day = request.POST.get('schedule_day') or None
+            workflow.cron_expression = request.POST.get('cron_expression', '')
+            workflow.trigger_name = trigger_name
+            workflow.trigger_scheduled_time = trigger_scheduled_time
+            workflow.poll_duration_hours = poll_duration_hours
+            workflow.selected_columns = selected_columns_str
+            workflow.recipient_email = request.POST.get('recipient_email', '').strip() or None
+            workflow.save()
+
+            # Re-register or update Celery schedule
+            if schedule_type not in ('manual',):
+                _register_celery_schedule(workflow)
+            else:
+                # If changed to manual, deregister existing celery task
+                try:
+                    from django_celery_beat.models import PeriodicTask
+                    if workflow.celery_task_name:
+                        PeriodicTask.objects.filter(name=workflow.celery_task_name).delete()
+                        workflow.celery_task_name = ''
+                        workflow.save(update_fields=['celery_task_name'])
+                except Exception:
+                    pass
+
+            try:
+                from logs.models import AuditLog
+                AuditLog.objects.create(
+                    user=request.user,
+                    action=f'Edited Workflow: {workflow.name}',
+                    entity_type='Workflow',
+                    entity_id=workflow.id,
+                    details={'schedule': workflow.schedule_type},
+                    ip_address=request.META.get('REMOTE_ADDR'),
+                    level='info',
+                )
+            except Exception:
+                pass
+
+            messages.success(request, f'Workflow "{workflow.name}" updated successfully.')
+            return redirect('workflows:detail', workflow_id=workflow.id)
+
+        except Exception as e:
+            messages.error(request, f'Error updating workflow: {str(e)}')
+
+    return render(request, 'workflows/edit.html', {
+        'workflow': workflow,
+        'mappings': mappings,
+        'is_edit': True,
+    })
 
 
 def _register_celery_schedule(workflow):
@@ -212,6 +307,7 @@ def api_trigger_workflow(request, workflow_id):
         from validations.engine import ValidationEngine
         run = ValidationRun.objects.create(
             mapping=workflow.mapping,
+            workflow=workflow,
             trigger_type='manual',
             status='pending',
             selected_columns=workflow.selected_columns,
@@ -294,3 +390,43 @@ def api_start_db_trigger(request, workflow_id):
         return JsonResponse({'success': True, 'message': 'Polling started.'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@contributor_or_admin_required
+@require_POST
+def workflow_delete_view(request, workflow_id):
+    """Delete a workflow."""
+    if hasattr(request.user, 'profile') and request.user.profile.role == 'auditor':
+        messages.error(request, 'Permission denied.')
+        return redirect('workflows:list')
+    
+    workflow = get_object_or_404(Workflow, id=workflow_id)
+    name = workflow.name
+    
+    # Deregister Celery Beat task if registered
+    try:
+        from django_celery_beat.models import PeriodicTask
+        if workflow.celery_task_name:
+            PeriodicTask.objects.filter(name=workflow.celery_task_name).delete()
+    except Exception:
+        pass
+        
+    workflow.delete()
+    
+    try:
+        from logs.models import AuditLog
+        AuditLog.objects.create(
+            user=request.user,
+            action=f'Deleted Workflow: {name}',
+            entity_type='Workflow',
+            entity_id=workflow_id,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            level='warning',
+        )
+    except Exception:
+        pass
+        
+    messages.success(request, f'Workflow "{name}" deleted successfully.')
+    return redirect('workflows:list')
+

@@ -136,11 +136,11 @@ def api_get_notifications(request):
 
 @login_required
 def api_clear_notifications(request):
-    """Mark all notifications for the current user as read."""
+    """Clear all notifications for the current user."""
     if request.method != 'POST':
          return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
-    request.user.notifications.filter(is_read=False).update(is_read=True)
-    return JsonResponse({'success': True, 'message': 'All notifications marked as read'})
+    request.user.notifications.all().delete()
+    return JsonResponse({'success': True, 'message': 'All notifications cleared'})
 
 
 # Help Center Operations Data Dictionary

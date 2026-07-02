@@ -213,6 +213,34 @@ def toggle_user_view(request, user_id):
     return redirect('accounts:manage_users')
 
 
+@login_required
+@admin_required
+def delete_user_view(request, user_id):
+    """Admin-only: Delete a user."""
+    if request.method == 'POST':
+        target_user = get_object_or_404(User, id=user_id)
+        if target_user == request.user:
+            messages.error(request, 'You cannot delete your own account.')
+        else:
+            username = target_user.username
+            target_user.delete()
+            messages.success(request, f'User "{username}" has been deleted successfully.')
+
+            try:
+                from logs.models import AuditLog
+                AuditLog.objects.create(
+                    user=request.user,
+                    action=f'User Deleted: {username}',
+                    entity_type='User',
+                    entity_id=user_id,
+                    ip_address=request.META.get('REMOTE_ADDR'),
+                    level='warning',
+                )
+            except Exception:
+                pass
+
+    return redirect('accounts:manage_users')
+
 def forgot_password_view(request):
     """Password reset request (authorized by Admin)."""
     users = User.objects.all().order_by('username')

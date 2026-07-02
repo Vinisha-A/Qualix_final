@@ -10,7 +10,10 @@ urlpatterns = [
     path('delete/<int:conn_id>/', views.connection_delete_view, name='delete'),
     # API endpoints
     path('api/test/<int:conn_id>/', views.api_test_connection, name='api_test'),
+    path('api/catalogs/', views.api_get_catalogs, name='api_catalogs'),
     path('api/schemas/', views.api_get_schemas, name='api_schemas'),
     path('api/tables/', views.api_get_tables, name='api_tables'),
     path('api/columns/', views.api_get_columns, name='api_columns'),
+    path('preview/source/', views.preview_source_view, name='preview_source'),
+    path('preview/target/', views.preview_target_view, name='preview_target'),
 ]

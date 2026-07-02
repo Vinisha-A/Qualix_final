@@ -4,6 +4,11 @@ from django.core.validators import MaxLengthValidator
 from cryptography.fernet import Fernet
 from django.conf import settings
 import base64
+import certifi
+import ssl
+import os
+import logging
+os.environ['SSL_CERT_FILE'] = certifi.where()
 
 
 def get_fernet():
@@ -26,8 +31,11 @@ class DataConnection(models.Model):
         ('databricks', 'Databricks'),
         ('db2', 'DB2'),
         ('oracle', 'Oracle'),
+        ('lakehouse', 'Lakehouse'),
         ('csv', 'Flat File (CSV)'),
         ('parquet', 'Flat File (Parquet)'),
+        ('excel', 'Flat File (Excel)'),
+        ('text', 'Flat File (Text)'),
     ]
 
     name = models.CharField(max_length=200, help_text='Friendly name for this connection')
@@ -40,6 +48,7 @@ class DataConnection(models.Model):
     database_name = models.CharField(max_length=200, blank=True)
     username = models.CharField(max_length=200, blank=True)
     encrypted_password = models.BinaryField(blank=True, default=b'')
+    driver = models.CharField(max_length=100, blank=True, help_text='Optional DBAPI driver override (e.g. cx_Oracle, oracledb, pyodbc)')
 
     # File connection fields
     file = models.FileField(upload_to='uploads/connections/', blank=True)
@@ -61,11 +70,11 @@ class DataConnection(models.Model):
 
     @property
     def is_database(self):
-        return self.connection_type in ('postgresql', 'mysql', 'databricks', 'db2', 'oracle')
+        return self.connection_type in ('postgresql', 'mysql', 'databricks', 'db2', 'oracle', 'lakehouse')
 
     @property
     def is_file(self):
-        return self.connection_type in ('csv', 'parquet', 'flat_file')
+        return self.connection_type in ('csv', 'parquet', 'excel', 'text', 'flat_file')
 
     def set_password(self, raw_password):
         """Encrypt and store the database password."""
@@ -94,9 +103,17 @@ class DataConnection(models.Model):
         elif self.connection_type == 'mysql':
             return f"mysql+pymysql://{encoded_username}:{encoded_password}@{self.host}:{self.port or 3306}/{self.database_name}"
         elif self.connection_type == 'databricks':
-            return f"databricks://token:{encoded_password}@{self.host}:{self.port or 443}/{self.database_name}"
+            return (
+                f"databricks://token:{encoded_password}"
+                f"@{self.host}"
+                f"?http_path={self.database_name}"
+            )
         elif self.connection_type == 'db2':
             return f"db2+ibm_db://{encoded_username}:{encoded_password}@{self.host}:{self.port or 50000}/{self.database_name}"
         elif self.connection_type == 'oracle':
-            return f"oracle+cx_oracle://{encoded_username}:{encoded_password}@{self.host}:{self.port or 1521}/{self.database_name}"
+            driver = self.driver.strip() if self.driver else 'oracledb'
+            return f"oracle+{driver}://{encoded_username}:{encoded_password}@{self.host}:{self.port or 1521}/{self.database_name}"
+        elif self.connection_type == 'lakehouse':
+            driver = self.driver.strip() if self.driver else 'pyodbc'
+            return f"{driver}://{encoded_username}:{encoded_password}@{self.host}:{self.port or 443}/{self.database_name}"
         return None

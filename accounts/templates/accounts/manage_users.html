@@ -67,17 +67,26 @@
                         <td>{{ profile.created_at|date:"d M Y" }}</td>
                         <td>
                             {% if profile.user != request.user %}
-                                <form method="post" action="{% url 'accounts:toggle_user' profile.user.id %}" style="display:inline;">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm {% if profile.user.is_active %}btn-outline{% else %}btn-success{% endif %}" 
-                                            data-tooltip="{% if profile.user.is_active %}Deactivate{% else %}Activate{% endif %}">
-                                        <i class="fas fa-{% if profile.user.is_active %}ban{% else %}check{% endif %}"></i>
-                                    </button>
-                                </form>
+                                <div class="d-flex gap-8" style="display: inline-flex;">
+                                    <form method="post" action="{% url 'accounts:toggle_user' profile.user.id %}" style="display:inline;">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm {% if profile.user.is_active %}btn-outline{% else %}btn-success{% endif %}" 
+                                                data-tooltip="{% if profile.user.is_active %}Deactivate{% else %}Activate{% endif %}">
+                                            <i class="fas fa-{% if profile.user.is_active %}ban{% else %}check{% endif %}"></i>
+                                        </button>
+                                    </form>
+                                    <form method="post" action="{% url 'accounts:delete_user' profile.user.id %}" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this user? This action cannot be undone.');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-danger" style="background-color: var(--danger); border-color: var(--danger); color: white;" data-tooltip="Delete User">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </form>
+                                </div>
                             {% else %}
                                 <span class="text-muted" style="font-size: 0.75rem;">You</span>
                             {% endif %}
                         </td>
+
                     </tr>
                     {% empty %}
                     <tr>

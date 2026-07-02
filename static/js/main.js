@@ -142,14 +142,71 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // ─── Connection-based Dynamic Selects ───────────────────────────────────────
+function updateTablePreviewLink(prefix) {
+    const connSelect = document.getElementById(`${prefix}-connection`);
+    const catalogSelect = document.getElementById(`${prefix}-catalog`);
+    const schemaSelect = document.getElementById(`${prefix}-schema`);
+    const tableSelect = document.getElementById(`${prefix}-table`);
+    const previewWrapper = document.getElementById(`${prefix}-table-preview-wrapper`);
+    const previewBtn = document.getElementById(`${prefix}-table-preview-btn`);
+
+    if (!connSelect || !tableSelect || !previewWrapper || !previewBtn) return;
+
+    const connId = connSelect.value;
+    const table = tableSelect.value;
+    const schema = schemaSelect ? schemaSelect.value : '';
+    const catalog = catalogSelect ? catalogSelect.value : '';
+
+    // Count how many tables are available in the dropdown (excluding the empty/placeholder select option)
+    let tablesCount = 0;
+    if (tableSelect && tableSelect.options) {
+        for (let i = 0; i < tableSelect.options.length; i++) {
+            if (tableSelect.options[i].value !== "") {
+                tablesCount++;
+            }
+        }
+    }
+
+    if (connId && table && tablesCount >= 1) {
+        previewBtn.href = `/connections/preview/${prefix}/?connection_id=${connId}&schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}&catalog=${encodeURIComponent(catalog)}`;
+        previewWrapper.style.display = 'block';
+    } else {
+        previewWrapper.style.display = 'none';
+        previewBtn.href = '#';
+    }
+}
+
 function initConnectionSelects() {
     // Source connection change
     const sourceConn = document.getElementById('source-connection');
     if (sourceConn) {
         sourceConn.addEventListener('change', () => {
-            const connId = sourceConn.value;
-            if (connId) {
-                loadSchemas(connId, 'source');
+            handleConnectionChange(sourceConn, 'source');
+        });
+        if (sourceConn.value && !window.isRestoringDraft) {
+            handleConnectionChange(sourceConn, 'source');
+        }
+    }
+
+    // Target connection change
+    const targetConn = document.getElementById('target-connection');
+    if (targetConn) {
+        targetConn.addEventListener('change', () => {
+            handleConnectionChange(targetConn, 'target');
+        });
+        if (targetConn.value && !window.isRestoringDraft) {
+            handleConnectionChange(targetConn, 'target');
+        }
+    }
+
+    // Catalog change listeners
+    const sourceCatalog = document.getElementById('source-catalog');
+    if (sourceCatalog) {
+        sourceCatalog.addEventListener('change', () => {
+            const connId = document.getElementById('source-connection').value;
+            const catalog = sourceCatalog.value;
+            if (connId && catalog) {
+                loadSchemas(connId, 'source', catalog);
             } else {
                 clearSelect('source-schema');
                 clearSelect('source-table');
@@ -158,13 +215,13 @@ function initConnectionSelects() {
         });
     }
 
-    // Target connection change
-    const targetConn = document.getElementById('target-connection');
-    if (targetConn) {
-        targetConn.addEventListener('change', () => {
-            const connId = targetConn.value;
-            if (connId) {
-                loadSchemas(connId, 'target');
+    const targetCatalog = document.getElementById('target-catalog');
+    if (targetCatalog) {
+        targetCatalog.addEventListener('change', () => {
+            const connId = document.getElementById('target-connection').value;
+            const catalog = targetCatalog.value;
+            if (connId && catalog) {
+                loadSchemas(connId, 'target', catalog);
             } else {
                 clearSelect('target-schema');
                 clearSelect('target-table');
@@ -178,9 +235,10 @@ function initConnectionSelects() {
     if (sourceSchema) {
         sourceSchema.addEventListener('change', () => {
             const connId = document.getElementById('source-connection').value;
+            const catalog = document.getElementById('source-catalog') ? document.getElementById('source-catalog').value : '';
             const schema = sourceSchema.value;
             if (connId && schema) {
-                loadTables(connId, schema, 'source');
+                loadTables(connId, schema, 'source', catalog);
             }
         });
     }
@@ -189,9 +247,10 @@ function initConnectionSelects() {
     if (targetSchema) {
         targetSchema.addEventListener('change', () => {
             const connId = document.getElementById('target-connection').value;
+            const catalog = document.getElementById('target-catalog') ? document.getElementById('target-catalog').value : '';
             const schema = targetSchema.value;
             if (connId && schema) {
-                loadTables(connId, schema, 'target');
+                loadTables(connId, schema, 'target', catalog);
             }
         });
     }
@@ -201,12 +260,15 @@ function initConnectionSelects() {
     if (sourceTable) {
         sourceTable.addEventListener('change', () => {
             const connId = document.getElementById('source-connection').value;
+            const catalog = document.getElementById('source-catalog') ? document.getElementById('source-catalog').value : '';
             const schema = document.getElementById('source-schema').value;
             const table = sourceTable.value;
             if (connId && table) {
-                loadColumns(connId, schema, table, 'source');
+                loadColumns(connId, schema, table, 'source', catalog);
+                updateTablePreviewLink('source');
             } else {
                 checkTableSelections();
+                updateTablePreviewLink('source');
             }
         });
     }
@@ -215,12 +277,15 @@ function initConnectionSelects() {
     if (targetTable) {
         targetTable.addEventListener('change', () => {
             const connId = document.getElementById('target-connection').value;
+            const catalog = document.getElementById('target-catalog') ? document.getElementById('target-catalog').value : '';
             const schema = document.getElementById('target-schema').value;
             const table = targetTable.value;
             if (connId && table) {
-                loadColumns(connId, schema, table, 'target');
+                loadColumns(connId, schema, table, 'target', catalog);
+                updateTablePreviewLink('target');
             } else {
                 checkTableSelections();
+                updateTablePreviewLink('target');
             }
         });
     }
@@ -242,7 +307,76 @@ function initConnectionSelects() {
         checkTableSelections();
         handleColumnModeChange();
     }
-}function loadSchemas(connId, prefix) {
+}
+
+// Connection types that use the catalog → schema → table → columns hierarchy
+// Only Databricks and Lakehouse require a catalog selection; all others go straight to schema.
+const DB_TYPES_WITH_CATALOG = ['databricks', 'lakehouse'];
+
+async function handleConnectionChange(selectEl, prefix) {
+    const connId = selectEl.value;
+    const catalogGroup = document.getElementById(`${prefix}-catalog-group`);
+    const catalogSelect = document.getElementById(`${prefix}-catalog`);
+
+    // Reset all downstream fields
+    if (catalogGroup) catalogGroup.style.display = 'none';
+    if (catalogSelect) catalogSelect.innerHTML = '<option value="">-- Select --</option>';
+    clearSelect(`${prefix}-schema`);
+    clearSelect(`${prefix}-table`);
+    clearColumnList(prefix);
+
+    if (!connId) return;
+
+    const selectedOpt = selectEl.selectedOptions[0];
+    const connType = selectedOpt ? selectedOpt.getAttribute('data-type') : '';
+
+    // For all database types: show catalog first (strict hierarchy)
+    if (DB_TYPES_WITH_CATALOG.includes(connType)) {
+        if (catalogGroup) catalogGroup.style.display = 'block';
+        await loadCatalogs(connId, prefix);
+    } else {
+        // File connections — go straight to schemas/tables
+        await loadSchemas(connId, prefix);
+    }
+}
+
+function loadCatalogs(connId, prefix) {
+    const select = document.getElementById(`${prefix}-catalog`);
+    const catalogGroup = document.getElementById(`${prefix}-catalog-group`);
+    if (!select) return Promise.resolve();
+
+    if (catalogGroup) catalogGroup.style.display = 'block';
+    select.innerHTML = '<option value="">Loading...</option>';
+    clearSelect(`${prefix}-schema`);
+    clearSelect(`${prefix}-table`);
+    clearColumnList(prefix);
+
+    return fetch(`/connections/api/catalogs/?connection_id=${connId}`)
+        .then(r => r.json())
+        .then(data => {
+            select.innerHTML = '<option value="">-- Select Catalog --</option>';
+            if (data.catalogs && data.catalogs.length > 0) {
+                data.catalogs.forEach(catalog => {
+                    const opt = document.createElement('option');
+                    opt.value = catalog;
+                    opt.textContent = catalog;
+                    select.appendChild(opt);
+                });
+                // Auto-select if there is only one catalog (e.g. Oracle service name)
+                if (data.catalogs.length === 1) {
+                    select.value = data.catalogs[0];
+                    return loadSchemas(connId, prefix, data.catalogs[0]);
+                }
+                // For draft restore, caller sets the value manually
+            }
+        })
+        .catch(err => {
+            select.innerHTML = '<option value="">Error loading catalogs</option>';
+            showToast('Failed to load catalogs', 'error');
+        });
+}
+
+function loadSchemas(connId, prefix, catalog = '') {
     const select = document.getElementById(`${prefix}-schema`);
     if (!select) return Promise.resolve();
 
@@ -250,26 +384,29 @@ function initConnectionSelects() {
     clearSelect(`${prefix}-table`);
     clearColumnList(prefix);
 
-    return fetch(`/connections/api/schemas/?connection_id=${connId}`)
+    let url = `/connections/api/schemas/?connection_id=${connId}`;
+    if (catalog) {
+        url += `&catalog=${encodeURIComponent(catalog)}`;
+    }
+
+    return fetch(url)
         .then(r => r.json())
         .then(data => {
-            select.innerHTML = '<option value="">Select Schema</option>';
-            if (data.schemas) {
+            if (data.is_file) {
+                // File-based connections — auto-load tables
+                select.innerHTML = '<option value="file">File</option>';
+                return loadTables(connId, 'file', prefix);
+            }
+            select.innerHTML = '<option value="">-- Select Schema --</option>';
+            if (data.schemas && data.schemas.length > 0) {
                 data.schemas.forEach(schema => {
                     const opt = document.createElement('option');
                     opt.value = schema;
                     opt.textContent = schema;
                     select.appendChild(opt);
                 });
-            }
-            if (data.is_file) {
-                // For file-based connections, auto-load columns
-                select.innerHTML = '<option value="file">File</option>';
-                return loadTables(connId, 'file', prefix);
-            }
-            if (!window.isRestoringDraft && data.schemas && data.schemas.length > 0) {
-                select.value = data.schemas[0];
-                return loadTables(connId, data.schemas[0], prefix);
+                // Strict hierarchy: user must pick schema manually — no auto-cascade
+                // Exception: when restoring drafts the caller sets the value
             }
         })
         .catch(err => {
@@ -278,18 +415,23 @@ function initConnectionSelects() {
         });
 }
 
-function loadTables(connId, schema, prefix) {
+function loadTables(connId, schema, prefix, catalog = '') {
     const select = document.getElementById(`${prefix}-table`);
     if (!select) return Promise.resolve();
 
     select.innerHTML = '<option value="">Loading...</option>';
     clearColumnList(prefix);
 
-    return fetch(`/connections/api/tables/?connection_id=${connId}&schema=${encodeURIComponent(schema)}`)
+    let url = `/connections/api/tables/?connection_id=${connId}&schema=${encodeURIComponent(schema)}`;
+    if (catalog) {
+        url += `&catalog=${encodeURIComponent(catalog)}`;
+    }
+
+    return fetch(url)
         .then(r => r.json())
         .then(data => {
-            select.innerHTML = '<option value="">Select Table</option>';
-            if (data.tables) {
+            select.innerHTML = '<option value="">-- Select Table --</option>';
+            if (data.tables && data.tables.length > 0) {
                 data.tables.forEach(table => {
                     const opt = document.createElement('option');
                     opt.value = table;
@@ -297,24 +439,31 @@ function loadTables(connId, schema, prefix) {
                     select.appendChild(opt);
                 });
             }
-            if (!window.isRestoringDraft && data.tables && data.tables.length > 0) {
-                select.value = data.tables[0];
-                return loadColumns(connId, schema, data.tables[0], prefix);
+            // Strict hierarchy: user must select table explicitly — no auto-cascade to columns
+            if (!window.isRestoringDraft) {
+                select.value = '';
             }
+            updateTablePreviewLink(prefix);
         })
         .catch(err => {
             select.innerHTML = '<option value="">Error loading tables</option>';
             showToast('Failed to load tables', 'error');
+            updateTablePreviewLink(prefix);
         });
 }
 
-function loadColumns(connId, schema, table, prefix) {
+function loadColumns(connId, schema, table, prefix, catalog = '') {
     const select = document.getElementById(`${prefix}-column-select`);
     if (!select) return Promise.resolve();
 
     select.innerHTML = '<option value="">Loading...</option>';
 
-    return fetch(`/connections/api/columns/?connection_id=${connId}&schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`)
+    let url = `/connections/api/columns/?connection_id=${connId}&schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`;
+    if (catalog) {
+        url += `&catalog=${encodeURIComponent(catalog)}`;
+    }
+
+    return fetch(url)
         .then(r => r.json())
         .then(data => {
             select.innerHTML = '<option value="">Select Column</option>';
@@ -507,6 +656,9 @@ function pollValidationProgress(runId) {
     const progressBar = document.getElementById(`progress-fill-${runId}`);
     const progressValue = document.getElementById(`progress-value-${runId}`);
     const statusBadge = document.getElementById(`status-badge-${runId}`);
+    const passedVal = document.getElementById(`passed-checks-${runId}`);
+    const failedVal = document.getElementById(`failed-checks-${runId}`);
+    const totalVal = document.getElementById(`total-checks-${runId}`);
 
     if (!progressBar) return;
 
@@ -520,9 +672,18 @@ function pollValidationProgress(runId) {
                 if (progressValue) {
                     progressValue.textContent = `${data.progress}%`;
                 }
+                if (passedVal) {
+                    passedVal.textContent = data.passed;
+                }
+                if (failedVal) {
+                    failedVal.textContent = data.failed;
+                }
+                if (totalVal) {
+                    totalVal.textContent = data.total;
+                }
                 if (statusBadge) {
                     statusBadge.className = `badge badge-dot ${data.status === 'completed' ? 'badge-success' : data.status === 'failed' ? 'badge-danger' : 'badge-warning'}`;
-                    statusBadge.textContent = data.status;
+                    statusBadge.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
                 }
                 if (data.status === 'completed' || data.status === 'failed') {
                     clearInterval(poll);
@@ -538,6 +699,7 @@ function pollValidationProgress(runId) {
             .catch(() => clearInterval(poll));
     }, 3000);
 }
+
 
 // ─── Manual Trigger Validation ──────────────────────────────────────────────
 function triggerValidation(mappingId) {
@@ -840,60 +1002,190 @@ async function restoreMappingDraft(data) {
         const descInput = document.querySelector('[name="description"]');
         if (descInput) descInput.value = data['description'] || '';
 
-        // 2. Restore Source Connection cascade
-        const sourceConnVal = data['source_connection'];
-        if (sourceConnVal) {
-            const sourceConnSelect = document.getElementById('source-connection');
-            if (sourceConnSelect) {
-                sourceConnSelect.value = sourceConnVal;
-                await loadSchemas(sourceConnVal, 'source');
+        // Helper: restore a single side (source or target) of the connection cascade
+        async function restoreConnSide(prefix, data) {
+            console.log(`[restoreConnSide] Starting restoration for side: ${prefix}`);
+            try {
+                const connVal = data[`${prefix}_connection`];
+                if (!connVal) {
+                    console.log(`[restoreConnSide] No connection value found for side: ${prefix}`);
+                    return;
+                }
+                const connSelect = document.getElementById(`${prefix}-connection`);
+                if (!connSelect) {
+                    console.warn(`[restoreConnSide] Connection select element not found for side: ${prefix}`);
+                    return;
+                }
                 
-                const sourceSchemaVal = data['source_schema'];
-                if (sourceSchemaVal) {
-                    const sourceSchemaSelect = document.getElementById('source-schema');
-                    if (sourceSchemaSelect) {
-                        sourceSchemaSelect.value = sourceSchemaVal;
-                        await loadTables(sourceConnVal, sourceSchemaVal, 'source');
-                        
-                        const sourceTableVal = data['source_table'];
-                        if (sourceTableVal) {
-                            const sourceTableSelect = document.getElementById('source-table');
-                            if (sourceTableSelect) {
-                                sourceTableSelect.value = sourceTableVal;
-                                await loadColumns(sourceConnVal, sourceSchemaVal, sourceTableVal, 'source');
-                            }
+                // Fallback: if connection option is not found in select dropdown (e.g. inactive)
+                let connOptExists = Array.from(connSelect.options).some(o => o.value === String(connVal));
+                if (!connOptExists) {
+                    const opt = document.createElement('option');
+                    opt.value = String(connVal);
+                    opt.textContent = `Connection #${connVal} (Inactive/Saved)`;
+                    const connTypeVal = data[`${prefix}_connection_type`] || '';
+                    if (connTypeVal) {
+                        opt.setAttribute('data-type', connTypeVal);
+                    }
+                    connSelect.appendChild(opt);
+                }
+                connSelect.value = String(connVal);
+
+                const selectedOpt = connSelect.selectedOptions[0];
+                const connType = selectedOpt ? selectedOpt.getAttribute('data-type') : '';
+                const catalogVal = data[`${prefix}_catalog`];
+                const schemaVal = data[`${prefix}_schema`];
+                const tableVal = data[`${prefix}_table`];
+
+                console.log(`[restoreConnSide] Side: ${prefix}, Connection ID: ${connVal}, Type: ${connType}, Catalog: ${catalogVal}, Schema: ${schemaVal}, Table: ${tableVal}`);
+
+                if (DB_TYPES_WITH_CATALOG.includes(connType)) {
+                    // Show catalog group and load catalogs
+                    const catalogGroup = document.getElementById(`${prefix}-catalog-group`);
+                    if (catalogGroup) catalogGroup.style.display = 'block';
+                    
+                    console.log(`[restoreConnSide] Side: ${prefix}, loading catalogs...`);
+                    try {
+                        await loadCatalogs(connVal, prefix);
+                    } catch (e) {
+                        console.error(`[restoreConnSide] Side: ${prefix}, loadCatalogs failed:`, e);
+                    }
+
+                    const catalogSelect = document.getElementById(`${prefix}-catalog`);
+                    if (catalogSelect) {
+                        // Fallback: if catalog option is not found in select dropdown (e.g. db offline/changed)
+                        let catOptExists = Array.from(catalogSelect.options).some(o => o.value === String(catalogVal));
+                        if (!catOptExists && catalogVal) {
+                            const opt = document.createElement('option');
+                            opt.value = String(catalogVal);
+                            opt.textContent = String(catalogVal);
+                            catalogSelect.appendChild(opt);
                         }
+                        catalogSelect.value = String(catalogVal);
+                    }
+                    
+                    console.log(`[restoreConnSide] Side: ${prefix}, loading schemas...`);
+                    try {
+                        // Load schemas regardless of catalogVal selection presence
+                        await loadSchemas(connVal, prefix, catalogVal || '');
+                    } catch (e) {
+                        console.error(`[restoreConnSide] Side: ${prefix}, loadSchemas failed:`, e);
+                    }
+
+                    const schemaSelect = document.getElementById(`${prefix}-schema`);
+                    if (schemaSelect) {
+                        // Fallback: if schema option is not found in select dropdown
+                        let schOptExists = Array.from(schemaSelect.options).some(o => o.value === String(schemaVal));
+                        if (!schOptExists && schemaVal) {
+                            const opt = document.createElement('option');
+                            opt.value = String(schemaVal);
+                            opt.textContent = String(schemaVal);
+                            schemaSelect.appendChild(opt);
+                        }
+                        schemaSelect.value = schemaVal ? String(schemaVal) : '';
+                    }
+
+                    console.log(`[restoreConnSide] Side: ${prefix}, loading tables...`);
+                    try {
+                        await loadTables(connVal, schemaVal || '', prefix, catalogVal || '');
+                    } catch (e) {
+                        console.error(`[restoreConnSide] Side: ${prefix}, loadTables failed:`, e);
+                    }
+
+                    const tableSelect = document.getElementById(`${prefix}-table`);
+                    if (tableSelect) {
+                        // Fallback: if table option is not found in select dropdown
+                        let tblOptExists = Array.from(tableSelect.options).some(o => o.value === String(tableVal));
+                        if (!tblOptExists && tableVal) {
+                            const opt = document.createElement('option');
+                            opt.value = String(tableVal);
+                            opt.textContent = String(tableVal);
+                            tableSelect.appendChild(opt);
+                        }
+                        tableSelect.value = String(tableVal || '');
+                    }
+
+                    if (tableVal) {
+                        console.log(`[restoreConnSide] Side: ${prefix}, loading columns...`);
+                        try {
+                            await loadColumns(connVal, schemaVal || '', tableVal, prefix, catalogVal || '');
+                        } catch (e) {
+                            console.error(`[restoreConnSide] Side: ${prefix}, loadColumns failed:`, e);
+                        }
+                        updateTablePreviewLink(prefix);
+                    }
+                } else {
+                    // File connections or other DB connections without catalog
+                    console.log(`[restoreConnSide] Side: ${prefix}, loading schemas (no catalog)...`);
+                    try {
+                        await loadSchemas(connVal, prefix);
+                    } catch (e) {
+                        console.error(`[restoreConnSide] Side: ${prefix}, loadSchemas failed:`, e);
+                    }
+
+                    const schemaSelect = document.getElementById(`${prefix}-schema`);
+                    if (schemaSelect) {
+                        // Fallback: if schema option is not found in select dropdown
+                        let schOptExists = Array.from(schemaSelect.options).some(o => o.value === String(schemaVal));
+                        if (!schOptExists && schemaVal) {
+                            const opt = document.createElement('option');
+                            opt.value = String(schemaVal);
+                            opt.textContent = String(schemaVal);
+                            schemaSelect.appendChild(opt);
+                        }
+                        schemaSelect.value = schemaVal ? String(schemaVal) : '';
+                    }
+
+                    console.log(`[restoreConnSide] Side: ${prefix}, loading tables (no catalog)...`);
+                    try {
+                        await loadTables(connVal, schemaVal || '', prefix);
+                    } catch (e) {
+                        console.error(`[restoreConnSide] Side: ${prefix}, loadTables failed:`, e);
+                    }
+
+                    const tableSelect = document.getElementById(`${prefix}-table`);
+                    if (tableSelect) {
+                        // Fallback: if table option is not found in select dropdown
+                        let tblOptExists = Array.from(tableSelect.options).some(o => o.value === String(tableVal));
+                        if (!tblOptExists && tableVal) {
+                            const opt = document.createElement('option');
+                            opt.value = String(tableVal);
+                            opt.textContent = String(tableVal);
+                            tableSelect.appendChild(opt);
+                        }
+                        tableSelect.value = String(tableVal || '');
+                    }
+
+                    if (tableVal) {
+                        console.log(`[restoreConnSide] Side: ${prefix}, loading columns (no catalog)...`);
+                        try {
+                            await loadColumns(connVal, schemaVal || '', tableVal, prefix);
+                        } catch (e) {
+                            console.error(`[restoreConnSide] Side: ${prefix}, loadColumns failed:`, e);
+                        }
+                        updateTablePreviewLink(prefix);
                     }
                 }
+                console.log(`[restoreConnSide] Successfully finished restoration for side: ${prefix}`);
+            } catch (err) {
+                console.error(`[restoreConnSide] Critical error in restoreConnSide for side: ${prefix}:`, err);
             }
         }
 
+        // 2. Restore Source Connection cascade
+        try {
+            console.log("Starting source side restoration...");
+            await restoreConnSide('source', data);
+        } catch (e) {
+            console.error("Uncaught exception in source side restoration:", e);
+        }
+
         // 3. Restore Target Connection cascade
-        const targetConnVal = data['target_connection'];
-        if (targetConnVal) {
-            const targetConnSelect = document.getElementById('target-connection');
-            if (targetConnSelect) {
-                targetConnSelect.value = targetConnVal;
-                await loadSchemas(targetConnVal, 'target');
-                
-                const targetSchemaVal = data['target_schema'];
-                if (targetSchemaVal) {
-                    const targetSchemaSelect = document.getElementById('target-schema');
-                    if (targetSchemaSelect) {
-                        targetSchemaSelect.value = targetSchemaVal;
-                        await loadTables(targetConnVal, targetSchemaVal, 'target');
-                        
-                        const targetTableVal = data['target_table'];
-                        if (targetTableVal) {
-                            const targetTableSelect = document.getElementById('target-table');
-                            if (targetTableSelect) {
-                                targetTableSelect.value = targetTableVal;
-                                await loadColumns(targetConnVal, targetSchemaVal, targetTableVal, 'target');
-                            }
-                        }
-                    }
-                }
-            }
+        try {
+            console.log("Starting target side restoration...");
+            await restoreConnSide('target', data);
+        } catch (e) {
+            console.error("Uncaught exception in target side restoration:", e);
         }
 
         // 4. Restore Column Selection Mode and choices
@@ -917,14 +1209,32 @@ async function restoreMappingDraft(data) {
             const sourceColVal = data['source_columns'];
             const sourceColSelect = document.getElementById('source-column-select');
             if (sourceColVal && sourceColSelect) {
-                sourceColSelect.value = Array.isArray(sourceColVal) ? sourceColVal[0] : sourceColVal;
+                const sVal = Array.isArray(sourceColVal) ? sourceColVal[0] : sourceColVal;
+                // Fallback: if column option is not found in select dropdown
+                let sColOptExists = Array.from(sourceColSelect.options).some(o => o.value === String(sVal));
+                if (!sColOptExists && sVal) {
+                    const opt = document.createElement('option');
+                    opt.value = String(sVal);
+                    opt.textContent = String(sVal);
+                    sourceColSelect.appendChild(opt);
+                }
+                sourceColSelect.value = sVal;
                 renderSingleColumnOps('source');
             }
 
             const targetColVal = data['target_columns'];
             const targetColSelect = document.getElementById('target-column-select');
             if (targetColVal && targetColSelect) {
-                targetColSelect.value = Array.isArray(targetColVal) ? targetColVal[0] : targetColVal;
+                const tVal = Array.isArray(targetColVal) ? targetColVal[0] : targetColVal;
+                // Fallback: if column option is not found in select dropdown
+                let tColOptExists = Array.from(targetColSelect.options).some(o => o.value === String(tVal));
+                if (!tColOptExists && tVal) {
+                    const opt = document.createElement('option');
+                    opt.value = String(tVal);
+                    opt.textContent = String(tVal);
+                    targetColSelect.appendChild(opt);
+                }
+                targetColSelect.value = tVal;
                 renderSingleColumnOps('target');
             }
 
@@ -1661,21 +1971,11 @@ function validateDateFilters() {
     const sourceCol = document.getElementById('source-date-column').value;
     if (sourceCol) {
         const sourceFilterType = document.querySelector('input[name="source_date_filter_type"]:checked')?.value || 'range';
-        const sourceValueType = document.querySelector('input[name="source_date_value_type"]:checked')?.value || 'calendar';
-        const sourceSingle = document.getElementById('source-date-single').value;
         const sourceStart = document.getElementById('source-date-filter-start').value;
         const sourceEnd = document.getElementById('source-date-filter-end').value;
 
-        if (sourceFilterType === 'specific' && sourceValueType === 'calendar' && !sourceSingle) {
-            showToast('Please select a Date for the Source filter.', 'warning');
-            return false;
-        }
         if (sourceFilterType === 'range') {
-            if (!sourceStart || !sourceEnd) {
-                showToast('Please select both From and To dates for the Source filter.', 'warning');
-                return false;
-            }
-            if (new Date(sourceStart) > new Date(sourceEnd)) {
+            if (sourceStart && sourceEnd && new Date(sourceStart) > new Date(sourceEnd)) {
                 showToast('Source From Date cannot be greater than To Date.', 'warning');
                 return false;
             }
@@ -1685,21 +1985,11 @@ function validateDateFilters() {
     const targetCol = document.getElementById('target-date-column').value;
     if (targetCol) {
         const targetFilterType = document.querySelector('input[name="target_date_filter_type"]:checked')?.value || 'range';
-        const targetValueType = document.querySelector('input[name="target_date_value_type"]:checked')?.value || 'calendar';
-        const targetSingle = document.getElementById('target-date-single').value;
         const targetStart = document.getElementById('target-date-filter-start').value;
         const targetEnd = document.getElementById('target-date-filter-end').value;
 
-        if (targetFilterType === 'specific' && targetValueType === 'calendar' && !targetSingle) {
-            showToast('Please select a Date for the Target filter.', 'warning');
-            return false;
-        }
         if (targetFilterType === 'range') {
-            if (!targetStart || !targetEnd) {
-                showToast('Please select both From and To dates for the Target filter.', 'warning');
-                return false;
-            }
-            if (new Date(targetStart) > new Date(targetEnd)) {
+            if (targetStart && targetEnd && new Date(targetStart) > new Date(targetEnd)) {
                 showToast('Target From Date cannot be greater than To Date.', 'warning');
                 return false;
             }
@@ -1708,6 +1998,7 @@ function validateDateFilters() {
 
     return true;
 }
+
 
 function toggleDateFilterInputs(prefix, type) {
     const singleWrapper = document.getElementById(`${prefix}-single-date-wrapper`);
@@ -1941,7 +2232,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
-                        showToast('All notifications marked as read', 'success');
+                        showToast('All notifications cleared', 'success');
                         loadNotifications();
                     }
                 })
@@ -1949,7 +2240,267 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Scan for and dynamically update any running validations on current page
+    const runningBadges = document.querySelectorAll('[id^="status-badge-"]');
+    runningBadges.forEach(badge => {
+        const text = badge.textContent.trim().toLowerCase();
+        if (text === 'running' || text === 'pending' || text === 'in progress' || badge.classList.contains('badge-warning')) {
+            const runId = badge.id.split('-').pop();
+            pollValidationProgress(runId);
+        }
+    });
+
     // Initial load and poll every 15 seconds
     loadNotifications();
     setInterval(loadNotifications, 15000);
 });
+
+// ─── Table Preview Modal System (In-page Popup with Backdrop Blur) ───────────
+function showTablePreviewModal(url, title) {
+    let modalOverlay = document.getElementById('table-preview-modal');
+    if (!modalOverlay) {
+        modalOverlay = document.createElement('div');
+        modalOverlay.id = 'table-preview-modal';
+        modalOverlay.className = 'preview-modal-overlay';
+        modalOverlay.innerHTML = `
+            <div class="preview-modal-content">
+                <div class="preview-modal-header">
+                    <h3>${title}</h3>
+                    <button type="button" class="preview-modal-close-btn">&times;</button>
+                </div>
+                <div class="preview-modal-body" id="table-preview-modal-body">
+                    <div style="display: flex; justify-content: center; align-items: center; height: 200px;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--primary);"></i>
+                        <span style="margin-left: 12px; font-weight: 500;">Loading preview data...</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modalOverlay);
+    } else {
+        modalOverlay.querySelector('.preview-modal-header h3').textContent = title;
+        modalOverlay.querySelector('#table-preview-modal-body').innerHTML = `
+            <div style="display: flex; justify-content: center; align-items: center; height: 200px;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--primary);"></i>
+                <span style="margin-left: 12px; font-weight: 500;">Loading preview data...</span>
+            </div>
+        `;
+    }
+
+    let modalStyle = document.getElementById('table-preview-modal-style');
+    if (!modalStyle) {
+        modalStyle = document.createElement('style');
+        modalStyle.id = 'table-preview-modal-style';
+        modalStyle.textContent = `
+            .preview-modal-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(15, 23, 42, 0.6);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                z-index: 9999;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                opacity: 0;
+                transition: opacity 0.25s ease;
+                pointer-events: none;
+            }
+            .preview-modal-overlay.active {
+                opacity: 1;
+                pointer-events: auto;
+            }
+            .preview-modal-content {
+                background: var(--bg-card, #ffffff);
+                border-radius: var(--radius-lg, 12px);
+                box-shadow: var(--shadow-xl), 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+                border: 1px solid var(--border-light, #e2e8f0);
+                width: 90%;
+                max-width: 1100px;
+                max-height: 85%;
+                display: flex;
+                flex-direction: column;
+                transform: translateY(20px) scale(0.98);
+                transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+            .preview-modal-overlay.active .preview-modal-content {
+                transform: translateY(0) scale(1);
+            }
+            .preview-modal-header {
+                padding: 16px 24px;
+                border-bottom: 1px solid var(--border-light, #e2e8f0);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                background: var(--bg-body, #f8fafc);
+                border-top-left-radius: var(--radius-lg, 12px);
+                border-top-right-radius: var(--radius-lg, 12px);
+            }
+            .preview-modal-header h3 {
+                margin: 0;
+                font-size: 1.15rem;
+                font-weight: 600;
+                color: var(--text-primary, #0f172a);
+            }
+            .preview-modal-body {
+                padding: 24px;
+                overflow: auto;
+                flex: 1;
+                background: var(--bg-card, #ffffff);
+                border-bottom-left-radius: var(--radius-lg, 12px);
+                border-bottom-right-radius: var(--radius-lg, 12px);
+            }
+            .preview-modal-close-btn {
+                background: none;
+                border: none;
+                font-size: 1.75rem;
+                color: var(--text-muted, #94a3b8);
+                cursor: pointer;
+                padding: 0 4px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: color 0.2s, transform 0.2s;
+                outline: none;
+                line-height: 1;
+            }
+            .preview-modal-close-btn:hover {
+                color: var(--danger, #ef4444);
+                transform: scale(1.15);
+            }
+            .preview-modal-body .card {
+                border: none !important;
+                box-shadow: none !important;
+                margin: 0 !important;
+                background: transparent !important;
+            }
+            .preview-modal-body .card-header {
+                display: none !important;
+            }
+            .preview-modal-body .card-body {
+                padding: 0 !important;
+            }
+        `;
+        document.head.appendChild(modalStyle);
+    }
+
+    setTimeout(() => {
+        modalOverlay.classList.add('active');
+    }, 10);
+
+    fetch(url)
+        .then(response => {
+            return response.text().then(text => {
+                return { ok: response.ok, status: response.status, text: text };
+            });
+        })
+        .then(res => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(res.text, 'text/html');
+            const card = doc.querySelector('.main-content .card') || doc.querySelector('.card');
+            
+            if (card) {
+                const body = document.getElementById('table-preview-modal-body');
+                body.innerHTML = '';
+                body.appendChild(card);
+            } else {
+                if (!res.ok) {
+                    throw new Error(`Failed to load table preview (HTTP ${res.status})`);
+                }
+                throw new Error('Could not parse table preview content');
+            }
+        })
+        .catch(error => {
+            console.error("Table preview fetch failed:", error);
+            const body = document.getElementById('table-preview-modal-body');
+            body.innerHTML = `
+                <div class="alert alert-danger" style="margin: 20px 0; padding: 16px 20px; border-radius: var(--radius-md); font-weight: 500;">
+                    <i class="fas fa-exclamation-triangle" style="margin-right: 8px; font-size: 1.1rem;"></i> 
+                    ${error.message || 'An error occurred while loading preview data.'}
+                </div>
+            `;
+        });
+}
+
+function closeTablePreviewModal() {
+    const modalOverlay = document.getElementById('table-preview-modal');
+    if (modalOverlay) {
+        modalOverlay.classList.remove('active');
+        // Reset the body content to a spinner so previous content is cleared
+        const body = document.getElementById('table-preview-modal-body');
+        if (body) {
+            body.innerHTML = `
+                <div style="display: flex; justify-content: center; align-items: center; height: 200px;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--primary);"></i>
+                    <span style="margin-left: 12px; font-weight: 500;">Loading preview data...</span>
+                </div>
+            `;
+        }
+    }
+}
+
+// Intercept table preview button clicks to show modal popup
+document.addEventListener('click', function(e) {
+    const previewBtn = e.target.closest('#source-table-preview-btn, #target-table-preview-btn');
+    if (previewBtn) {
+        e.preventDefault();
+        const url = previewBtn.getAttribute('href');
+        if (url && url !== '#') {
+            const title = previewBtn.id.includes('source') ? 'Source Table Preview' : 'Target Table Preview';
+            showTablePreviewModal(url, title);
+        }
+    }
+});
+
+// Intercept close button clicks to safely close without form submission or background loss
+document.addEventListener('click', function(e) {
+    const closeBtn = e.target.closest('.preview-modal-close-btn');
+    if (closeBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeTablePreviewModal();
+    }
+});
+
+// Close modal on backdrop click
+document.addEventListener('click', function(e) {
+    const modalOverlay = document.getElementById('table-preview-modal');
+    if (modalOverlay && e.target === modalOverlay) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeTablePreviewModal();
+    }
+});
+
+// Close modal on Escape key press
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeTablePreviewModal();
+    }
+});
+
+// Intercept form submissions inside the table preview modal to prevent page reload and handle paging/filtering inline
+document.addEventListener('submit', function(e) {
+    const modalOverlay = document.getElementById('table-preview-modal');
+    if (modalOverlay && modalOverlay.contains(e.target)) {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+        const params = new URLSearchParams();
+        for (const [key, val] of formData.entries()) {
+            params.append(key, val);
+        }
+        
+        // Find if this is source or target based on modal title
+        const titleEl = modalOverlay.querySelector('.preview-modal-header h3');
+        const title = titleEl ? titleEl.textContent : 'Table Preview';
+        const prefix = title.toLowerCase().includes('source') ? 'source' : 'target';
+        
+        const url = `/connections/preview/${prefix}/?${params.toString()}`;
+        showTablePreviewModal(url, title);
+    }
+});
+

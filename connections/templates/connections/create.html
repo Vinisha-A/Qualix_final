@@ -69,6 +69,12 @@
                             {{ form.password }}
                         </div>
                     </div>
+                    <!-- Driver field — shown for Oracle and Lakehouse only -->
+                    <div class="form-group" id="group-driver" style="display: none;">
+                        <label for="id_driver" id="label-driver">Driver</label>
+                        {{ form.driver }}
+                        <div class="form-hint" id="hint-driver">e.g., <code>cx_Oracle</code>, <code>oracledb</code> for Oracle &nbsp;|&nbsp; <code>pyodbc</code>, <code>connector</code> for Lakehouse</div>
+                    </div>
                 </div>
 
                 <!-- File Fields -->
@@ -76,7 +82,7 @@
                     <div class="form-group">
                         <label for="id_file" id="label-file">File Upload *</label>
                         {{ form.file }}
-                        <div class="form-hint">Supported: CSV (.csv), Parquet (.parquet, .parq)</div>
+                        <div class="form-hint">Supported: CSV (.csv), Parquet (.parquet, .parq), Excel (.xlsx, .xls), Text (.txt)</div>
                     </div>
                 </div>
 
@@ -113,6 +119,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const groupUsername = document.getElementById('group-username');
     const labelPassword = document.getElementById('label-password');
     const groupPassword = document.getElementById('group-password');
+    const groupDriver = document.getElementById('group-driver');
     const labelFile = document.getElementById('label-file');
 
     const hostInput = document.getElementById('id_host');
@@ -120,31 +127,36 @@ document.addEventListener('DOMContentLoaded', function() {
     const databaseNameInput = document.getElementById('id_database_name');
     const usernameInput = document.getElementById('id_username');
     const passwordInput = document.getElementById('id_password');
+    const driverInput = document.getElementById('id_driver');
     const fileInput = document.getElementById('id_file');
 
-    function toggleFields() {
-        const val = typeSelect.value;
-
-        // Reset required attributes
+    function resetRequired() {
         hostInput.removeAttribute('required');
         portInput.removeAttribute('required');
         databaseNameInput.removeAttribute('required');
         usernameInput.removeAttribute('required');
         passwordInput.removeAttribute('required');
         fileInput.removeAttribute('required');
+    }
 
-        // Reset fields visibility
+    function showAllDbGroups() {
         if (groupHost) groupHost.style.display = 'block';
         if (groupPort) groupPort.style.display = 'block';
         if (groupDatabaseName) groupDatabaseName.style.display = 'block';
         if (groupUsername) groupUsername.style.display = 'block';
         if (groupPassword) groupPassword.style.display = 'block';
+        if (groupDriver) groupDriver.style.display = 'none';
+    }
 
-        if (val === 'csv' || val === 'parquet') {
+    function toggleFields() {
+        const val = typeSelect.value;
+
+        resetRequired();
+        showAllDbGroups();
+
+        if (val === 'csv' || val === 'parquet' || val === 'excel' || val === 'text') {
             dbFields.style.display = 'none';
             fileFields.style.display = 'block';
-
-            // Set file input required if not editing
             {% if not is_edit or not connection.file %}
             fileInput.setAttribute('required', 'required');
             {% endif %}
@@ -153,16 +165,14 @@ document.addEventListener('DOMContentLoaded', function() {
             dbFields.style.display = 'block';
             fileFields.style.display = 'none';
 
-            // Show/Hide specific fields
             if (groupPort) groupPort.style.display = 'none';
             if (groupUsername) groupUsername.style.display = 'none';
+            if (groupDriver) groupDriver.style.display = 'none';
 
-            // Set labels
             labelHost.textContent = 'Server Hostname *';
             labelDatabaseName.textContent = 'HTTP Path *';
             labelPassword.textContent = 'Access Token {% if not is_edit or not connection.encrypted_password %}*{% endif %}';
 
-            // Set placeholder overrides
             hostInput.placeholder = 'e.g., adb-123456789.azuredatabricks.net';
             databaseNameInput.placeholder = 'e.g., sql/protocolv1/o/12345678/0000-1111-2222';
             {% if is_edit and connection.encrypted_password %}
@@ -171,24 +181,57 @@ document.addEventListener('DOMContentLoaded', function() {
             passwordInput.placeholder = 'Access Token';
             {% endif %}
 
-            // Set required
             hostInput.setAttribute('required', 'required');
             databaseNameInput.setAttribute('required', 'required');
             {% if not is_edit or not connection.encrypted_password %}
             passwordInput.setAttribute('required', 'required');
             {% endif %}
-        } else if (val === 'postgresql' || val === 'mysql' || val === 'db2' || val === 'oracle') {
+
+        } else if (val === 'oracle' || val === 'lakehouse') {
             dbFields.style.display = 'block';
             fileFields.style.display = 'none';
 
+            // Show driver field
+            if (groupDriver) groupDriver.style.display = 'block';
+
             // Set labels
+            labelHost.textContent = 'Host *';
+            labelPort.textContent = 'Port';
+            labelDatabaseName.textContent = val === 'lakehouse' ? 'Database / Workspace *' : 'Service Name / SID *';
+            labelUsername.textContent = 'Username *';
+            labelPassword.textContent = 'Password {% if not is_edit or not connection.encrypted_password %}*{% endif %}';
+
+            // Placeholders
+            hostInput.placeholder = val === 'lakehouse' ? 'e.g., lakehouse-server.example.com' : 'e.g., oracle-db.hdfcbank.com';
+            databaseNameInput.placeholder = val === 'lakehouse' ? 'e.g., my_lakehouse_db' : 'e.g., ORCL or XE';
+            portInput.placeholder = val === 'lakehouse' ? '443' : '1521';
+            {% if is_edit and connection.encrypted_password %}
+            passwordInput.placeholder = 'Leave blank to keep current password';
+            {% else %}
+            passwordInput.placeholder = 'Database password';
+            {% endif %}
+            if (driverInput) {
+                driverInput.placeholder = val === 'lakehouse' ? 'e.g., pyodbc, connector' : 'e.g., cx_Oracle, oracledb';
+            }
+
+            // Required
+            hostInput.setAttribute('required', 'required');
+            databaseNameInput.setAttribute('required', 'required');
+            usernameInput.setAttribute('required', 'required');
+            {% if not is_edit or not connection.encrypted_password %}
+            passwordInput.setAttribute('required', 'required');
+            {% endif %}
+
+        } else if (val === 'postgresql' || val === 'mysql' || val === 'db2') {
+            dbFields.style.display = 'block';
+            fileFields.style.display = 'none';
+
             labelHost.textContent = 'Host *';
             labelPort.textContent = 'Port';
             labelDatabaseName.textContent = 'Database *';
             labelUsername.textContent = 'Username *';
             labelPassword.textContent = 'Password {% if not is_edit or not connection.encrypted_password %}*{% endif %}';
 
-            // Set placeholders
             hostInput.placeholder = 'e.g., db-server.hdfcbank.com';
             databaseNameInput.placeholder = 'Database name';
             {% if is_edit and connection.encrypted_password %}
@@ -197,18 +240,10 @@ document.addEventListener('DOMContentLoaded', function() {
             passwordInput.placeholder = 'Database password';
             {% endif %}
 
-            // Set default port based on DB type
-            if (val === 'postgresql') {
-                portInput.placeholder = '5432';
-            } else if (val === 'mysql') {
-                portInput.placeholder = '3306';
-            } else if (val === 'db2') {
-                portInput.placeholder = '50000';
-            } else if (val === 'oracle') {
-                portInput.placeholder = '1521';
-            }
+            if (val === 'postgresql') portInput.placeholder = '5432';
+            else if (val === 'mysql') portInput.placeholder = '3306';
+            else if (val === 'db2') portInput.placeholder = '50000';
 
-            // Set required
             hostInput.setAttribute('required', 'required');
             databaseNameInput.setAttribute('required', 'required');
             usernameInput.setAttribute('required', 'required');
@@ -225,7 +260,6 @@ document.addEventListener('DOMContentLoaded', function() {
     toggleFields();
 
     {% if not is_edit %}
-    // Initialize Draft Manager
     setupFormDraftManager('conn-form', 'connection_create');
     {% endif %}
 });

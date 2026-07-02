@@ -4,6 +4,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
+from django.db.models import Q
 
 from .models import Mapping, ColumnMapping, ValidationRule
 from connections.models import DataConnection
@@ -15,10 +16,23 @@ logger = logging.getLogger(__name__)
 @login_required
 def mapping_list_view(request):
     """List all mappings."""
+    query = request.GET.get('query', '').strip()
+    
     mappings = Mapping.objects.filter(is_active=True).select_related(
         'source_connection', 'target_connection', 'created_by'
     )
-    return render(request, 'mappings/list.html', {'mappings': mappings})
+    
+    if query:
+        mappings = mappings.filter(
+            Q(name__icontains=query) |
+            Q(description__icontains=query) |
+            Q(source_table__icontains=query) |
+            Q(target_table__icontains=query) |
+            Q(source_connection__name__icontains=query) |
+            Q(target_connection__name__icontains=query)
+        )
+        
+    return render(request, 'mappings/list.html', {'mappings': mappings, 'query': query})
 
 
 def get_datatype_category(type_str, name_str=''):
@@ -64,9 +78,11 @@ def mapping_create_view(request):
 
             description = request.POST.get('description', '')
             source_conn_id = request.POST.get('source_connection')
+            source_catalog = request.POST.get('source_catalog', '')
             source_schema = request.POST.get('source_schema', '')
             source_table = request.POST.get('source_table', '')
             target_conn_id = request.POST.get('target_connection')
+            target_catalog = request.POST.get('target_catalog', '')
             target_schema = request.POST.get('target_schema', '')
             target_table = request.POST.get('target_table', '')
             is_draft = request.POST.get('is_draft', 'false') == 'true'
@@ -126,9 +142,11 @@ def mapping_create_view(request):
                 'name': name,
                 'description': description,
                 'source_connection_id': source_conn_id,
+                'source_catalog': source_catalog,
                 'source_schema': source_schema,
                 'source_table': source_table,
                 'target_connection_id': target_conn_id,
+                'target_catalog': target_catalog,
                 'target_schema': target_schema,
                 'target_table': target_table,
                 'created_by': request.user,
@@ -208,8 +226,8 @@ def mapping_create_view(request):
                 source_engine = ConnectorEngine(source_conn)
                 target_engine = ConnectorEngine(target_conn)
                 
-                src_all_cols = source_engine.get_columns(source_schema if source_schema != 'file' else None, source_table)
-                tgt_all_cols = target_engine.get_columns(target_schema if target_schema != 'file' else None, target_table)
+                src_all_cols = source_engine.get_columns(source_schema if source_schema != 'file' else None, source_table, catalog=source_catalog or None)
+                tgt_all_cols = target_engine.get_columns(target_schema if target_schema != 'file' else None, target_table, catalog=target_catalog or None)
                 
                 expanded_columns = []
                 for s_col in src_all_cols:
@@ -237,14 +255,14 @@ def mapping_create_view(request):
                 try:
                     source_conn = DataConnection.objects.get(id=source_conn_id)
                     source_engine = ConnectorEngine(source_conn)
-                    source_cols_map = {c['name'].lower(): c['type'] for c in source_engine.get_columns(source_schema if source_schema != 'file' else None, source_table)}
+                    source_cols_map = {c['name'].lower(): c['type'] for c in source_engine.get_columns(source_schema if source_schema != 'file' else None, source_table, catalog=source_catalog if source_conn.connection_type == 'databricks' else None)}
                 except Exception:
                     pass
 
                 try:
                     target_conn = DataConnection.objects.get(id=target_conn_id)
                     target_engine = ConnectorEngine(target_conn)
-                    target_cols_map = {c['name'].lower(): c['type'] for c in target_engine.get_columns(target_schema if target_schema != 'file' else None, target_table)}
+                    target_cols_map = {c['name'].lower(): c['type'] for c in target_engine.get_columns(target_schema if target_schema != 'file' else None, target_table, catalog=target_catalog if target_conn.connection_type == 'databricks' else None)}
                 except Exception:
                     pass
 
@@ -320,9 +338,11 @@ def mapping_detail_view(request, mapping_id):
         id=mapping_id
     )
     column_mappings = mapping.column_mappings.prefetch_related('rules').all()
+    runs = mapping.validation_runs.select_related('triggered_by').all().order_by('-created_at')
     return render(request, 'mappings/detail.html', {
         'mapping': mapping,
         'column_mappings': column_mappings,
+        'runs': runs,
     })
 
 
@@ -378,9 +398,11 @@ def mapping_edit_view(request, mapping_id):
 
             description = request.POST.get('description', '')
             source_conn_id = request.POST.get('source_connection')
+            source_catalog = request.POST.get('source_catalog', '')
             source_schema = request.POST.get('source_schema', '')
             source_table = request.POST.get('source_table', '')
             target_conn_id = request.POST.get('target_connection')
+            target_catalog = request.POST.get('target_catalog', '')
             target_schema = request.POST.get('target_schema', '')
             target_table = request.POST.get('target_table', '')
             is_draft = request.POST.get('is_draft', 'false') == 'true'
@@ -426,9 +448,11 @@ def mapping_edit_view(request, mapping_id):
                 'name': name,
                 'description': description,
                 'source_connection_id': source_conn_id,
+                'source_catalog': source_catalog,
                 'source_schema': source_schema,
                 'source_table': source_table,
                 'target_connection_id': target_conn_id,
+                'target_catalog': target_catalog,
                 'target_schema': target_schema,
                 'target_table': target_table,
                 'is_draft': is_draft,
@@ -501,8 +525,8 @@ def mapping_edit_view(request, mapping_id):
                 source_engine = ConnectorEngine(source_conn)
                 target_engine = ConnectorEngine(target_conn)
                 
-                src_all_cols = source_engine.get_columns(source_schema if source_schema != 'file' else None, source_table)
-                tgt_all_cols = target_engine.get_columns(target_schema if target_schema != 'file' else None, target_table)
+                src_all_cols = source_engine.get_columns(source_schema if source_schema != 'file' else None, source_table, catalog=source_catalog if source_conn.connection_type == 'databricks' else None)
+                tgt_all_cols = target_engine.get_columns(target_schema if target_schema != 'file' else None, target_table, catalog=target_catalog if target_conn.connection_type == 'databricks' else None)
                 
                 expanded_columns = []
                 for s_col in src_all_cols:
@@ -530,14 +554,14 @@ def mapping_edit_view(request, mapping_id):
                 try:
                     source_conn = DataConnection.objects.get(id=source_conn_id)
                     source_engine = ConnectorEngine(source_conn)
-                    source_cols_map = {c['name'].lower(): c['type'] for c in source_engine.get_columns(source_schema if source_schema != 'file' else None, source_table)}
+                    source_cols_map = {c['name'].lower(): c['type'] for c in source_engine.get_columns(source_schema if source_schema != 'file' else None, source_table, catalog=source_catalog if source_conn.connection_type == 'databricks' else None)}
                 except Exception:
                     pass
 
                 try:
                     target_conn = DataConnection.objects.get(id=target_conn_id)
                     target_engine = ConnectorEngine(target_conn)
-                    target_cols_map = {c['name'].lower(): c['type'] for c in target_engine.get_columns(target_schema if target_schema != 'file' else None, target_table)}
+                    target_cols_map = {c['name'].lower(): c['type'] for c in target_engine.get_columns(target_schema if target_schema != 'file' else None, target_table, catalog=target_catalog if target_conn.connection_type == 'databricks' else None)}
                 except Exception:
                     pass
 
@@ -634,9 +658,13 @@ def mapping_edit_view(request, mapping_id):
         'name': mapping.name,
         'description': mapping.description,
         'source_connection': mapping.source_connection_id,
+        'source_connection_type': mapping.source_connection.connection_type if mapping.source_connection else '',
+        'source_catalog': getattr(mapping, 'source_catalog', ''),
         'source_schema': mapping.source_schema,
         'source_table': mapping.source_table,
         'target_connection': mapping.target_connection_id,
+        'target_connection_type': mapping.target_connection.connection_type if mapping.target_connection else '',
+        'target_catalog': getattr(mapping, 'target_catalog', ''),
         'target_schema': mapping.target_schema,
         'target_table': mapping.target_table,
         'column_selection_mode': mode,
@@ -646,6 +674,8 @@ def mapping_edit_view(request, mapping_id):
         'operations': single_ops,
         'source_single_operations': single_ops,
         'target_single_operations': single_ops,
+        'source_date_column': mapping.source_date_column,
+        'source_date_filter_type': mapping.source_date_filter_type,
         'source_date_single': format_date_val(mapping.source_date_filter_start) if (mapping.source_date_filter_type == 'specific' and mapping.source_date_filter_start) else '',
         'source_date_filter_start': format_date_val(mapping.source_date_filter_start) if mapping.source_date_filter_start else '',
         'source_date_filter_end': format_date_val(mapping.source_date_filter_end) if mapping.source_date_filter_end else '',

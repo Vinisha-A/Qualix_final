@@ -33,6 +33,26 @@
                     </select>
                 </div>
 
+                <div class="form-group" id="columns-selection-group" style="display: none; margin-bottom: 20px;">
+                    <label style="font-weight: 600; display: block; margin-bottom: 8px;">Columns to Validate</label>
+                    <div style="background: var(--bg-input); border: 1px solid var(--border-medium); border-radius: var(--radius-md); padding: 16px; max-height: 250px; overflow-y: auto;">
+                        <div style="display: flex; gap: 12px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed var(--border-medium);">
+                            <button type="button" class="btn btn-xs btn-outline" onclick="toggleAllCheckboxes('.col-cb', true)">Select All</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="toggleAllCheckboxes('.col-cb', false)">Clear All</button>
+                        </div>
+                        <div id="workflow-columns-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <!-- populated dynamically -->
+                        </div>
+                    </div>
+                    <div class="form-hint" style="margin-top: 6px;">Select specific columns to validate. Leave all unchecked to validate all columns in the mapping.</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Recipient Email Address</label>
+                    <input type="email" name="recipient_email" class="form-control" placeholder="e.g., user@example.com">
+                    <div class="form-hint">Email address to receive validation reports. Leave empty to disable email notifications.</div>
+                </div>
+
 
 
                 <!-- ── Schedule Type + Time ──────────────────────────────── -->
@@ -162,7 +182,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function applyScheduleType(val) {
         // Standard time picker
-        timeGroup.style.display  = (val === 'manual' || val === 'db_trigger') ? 'none' : 'block';
+        timeGroup.style.display  = (val === 'db_trigger') ? 'none' : 'block';
         dayGroup.style.display   = (val === 'weekly' || val === 'monthly') ? 'block' : 'none';
         dbFields.style.display   = (val === 'db_trigger') ? 'block' : 'none';
 
@@ -202,7 +222,64 @@ document.addEventListener('DOMContentLoaded', function() {
     durInput.addEventListener('input', updateTimeline);
     updateTimeline();
 
+    // ── Mapping columns dynamic load ─────────────────────────────────────────
+    const mappingSelect = document.getElementById('workflow-mapping-select');
+    const colsGroup = document.getElementById('columns-selection-group');
+    const colsList = document.getElementById('workflow-columns-list');
 
+    function loadMappingColumns(mappingId) {
+        if (!mappingId) {
+            colsGroup.style.display = 'none';
+            colsList.innerHTML = '';
+            return;
+        }
+        
+        fetch(`/mappings/api/columns/${mappingId}/`)
+            .then(r => r.json())
+            .then(data => {
+                colsList.innerHTML = '';
+                if (data.columns && data.columns.length > 0) {
+                    data.columns.forEach(col => {
+                        const div = document.createElement('div');
+                        div.style.display = 'flex';
+                        div.style.alignItems = 'center';
+                        div.style.gap = '8px';
+                        
+                        const cb = document.createElement('input');
+                        cb.type = 'checkbox';
+                        cb.name = 'selected_columns';
+                        cb.value = col;
+                        cb.className = 'col-cb';
+                        cb.id = `col-${col}`;
+                        
+                        const lbl = document.createElement('label');
+                        lbl.htmlFor = `col-${col}`;
+                        lbl.textContent = col;
+                        lbl.style.margin = '0';
+                        lbl.style.fontWeight = 'normal';
+                        lbl.style.cursor = 'pointer';
+                        
+                        div.appendChild(cb);
+                        div.appendChild(lbl);
+                        colsList.appendChild(div);
+                    });
+                    colsGroup.style.display = 'block';
+                } else {
+                    colsGroup.style.display = 'none';
+                }
+            })
+            .catch(() => {
+                colsGroup.style.display = 'none';
+            });
+    }
+
+    mappingSelect.addEventListener('change', function() {
+        loadMappingColumns(this.value);
+    });
+
+    if (mappingSelect.value) {
+        loadMappingColumns(mappingSelect.value);
+    }
 });
 
 function toggleAllCheckboxes(selector, check = true) {

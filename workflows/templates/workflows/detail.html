@@ -32,9 +32,19 @@
             <button class="btn btn-sm btn-primary" onclick="triggerWorkflow({{ workflow.id }})">
                 <i class="fas fa-play"></i> Trigger Now
             </button>
+            <a href="{% url 'workflows:edit' workflow.id %}" class="btn btn-sm btn-outline">
+                <i class="fas fa-edit"></i> Edit
+            </a>
+            <form method="post" action="{% url 'workflows:delete' workflow.id %}" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this workflow?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-danger" style="background-color: var(--danger); border-color: var(--danger); color: white;">
+                    <i class="fas fa-trash-alt"></i> Delete
+                </button>
+            </form>
         </div>
         {% endif %}
     </div>
+
 
     <div class="card-body">
         {% if workflow.description %}

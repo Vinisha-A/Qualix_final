@@ -20,6 +20,7 @@ class Mapping(models.Model):
     source_connection = models.ForeignKey(
         DataConnection, on_delete=models.CASCADE, related_name='source_mappings'
     )
+    source_catalog = models.CharField(max_length=200, blank=True)
     source_schema = models.CharField(max_length=200, blank=True)
     source_table = models.CharField(max_length=200)
 
@@ -27,6 +28,7 @@ class Mapping(models.Model):
     target_connection = models.ForeignKey(
         DataConnection, on_delete=models.CASCADE, related_name='target_mappings'
     )
+    target_catalog = models.CharField(max_length=200, blank=True)
     target_schema = models.CharField(max_length=200, blank=True)
     target_table = models.CharField(max_length=200)
 

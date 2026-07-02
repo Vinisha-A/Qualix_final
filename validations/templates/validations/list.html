@@ -53,7 +53,7 @@
                 <tbody>
                     {% for run in runs %}
                     <tr>
-                        <td class="fw-600">{{ run.id }}</td>
+                        <td class="fw-600">{{ run.rev_index }}</td>
                         <td>{{ run.mapping.name }}</td>
                         <td>
                             <span class="badge badge-dot {% if run.status == 'completed' %}badge-success{% elif run.status == 'failed' %}badge-danger{% elif run.status == 'running' %}badge-warning{% else %}badge-muted{% endif %}"
@@ -120,6 +120,38 @@
                 </tbody>
             </table>
         </div>
+        
+        <!-- Pagination controls -->
+        {% if page_obj.has_other_pages %}
+        <div class="pagination-container" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-top: 1px solid var(--border-light); background: var(--bg-card); flex-wrap: wrap; gap: 16px;">
+            <div class="pagination-info text-muted" style="font-size: 0.85rem; font-weight: 500;">
+                Showing <strong style="color: var(--primary);">{{ page_obj.start_index }}</strong> to <strong style="color: var(--primary);">{{ page_obj.end_index }}</strong> of <strong style="color: var(--primary);">{{ paginator.count }}</strong> monitors
+            </div>
+            <div class="pagination-buttons" style="display: flex; gap: 6px; align-items: center;">
+                {% if page_obj.has_previous %}
+                    <a href="?page=1{% if query %}&query={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}" class="btn btn-sm btn-secondary" style="height: 32px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600;" title="First Page">
+                        <i class="fas fa-angle-double-left"></i>
+                    </a>
+                    <a href="?page={{ page_obj.previous_page_number }}{% if query %}&query={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}" class="btn btn-sm btn-secondary" style="height: 32px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600;" title="Previous Page">
+                        <i class="fas fa-angle-left"></i> Prev
+                    </a>
+                {% endif %}
+                
+                <span class="btn btn-sm btn-outline disabled" style="pointer-events: none; border-color: var(--border-medium); color: var(--text-primary); font-weight: 600; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0 16px; font-size: 0.85rem;">
+                    Page {{ page_obj.number }} of {{ paginator.num_pages }}
+                </span>
+
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}{% if query %}&query={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}" class="btn btn-sm btn-secondary" style="height: 32px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600;" title="Next Page">
+                        Next <i class="fas fa-angle-right"></i>
+                    </a>
+                    <a href="?page={{ paginator.num_pages }}{% if query %}&query={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}" class="btn btn-sm btn-secondary" style="height: 32px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600;" title="Last Page">
+                        <i class="fas fa-angle-double-right"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

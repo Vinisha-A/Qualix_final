@@ -563,3 +563,207 @@ class ValidationWorkspaceEnhancementsTestCase(TestCase):
             self.assertEqual(res_len.source_value, '22')
             self.assertEqual(res_len.target_value, '21')
 
+    def test_databricks_catalog_aware_validation(self):
+        # Create Databricks source and target connections
+        db_src = DataConnection.objects.create(
+            name='DB Src', connection_type='databricks', host='dummy_host', database_name='db1', created_by=self.user
+        )
+        db_tgt = DataConnection.objects.create(
+            name='DB Tgt', connection_type='databricks', host='dummy_host', database_name='db2', created_by=self.user
+        )
+
+        # Create mapping with catalog fields populated
+        mapping = Mapping.objects.create(
+            name='Databricks Catalog Pipeline',
+            source_connection=db_src,
+            source_catalog='src_catalog',
+            source_schema='src_schema',
+            source_table='customers',
+            target_connection=db_tgt,
+            target_catalog='tgt_catalog',
+            target_schema='tgt_schema',
+            target_table='customers',
+            created_by=self.user
+        )
+
+        col_map = ColumnMapping.objects.create(
+            mapping=mapping,
+            source_column='customer_id',
+            source_datatype='INTEGER',
+            target_column='customer_id',
+            target_datatype='INTEGER'
+        )
+
+        # Create validation run
+        run = ValidationRun.objects.create(
+            mapping=mapping,
+            triggered_by=self.user,
+            trigger_type='manual'
+        )
+
+        # Run checks using the validation engine
+        from validations.engine import ValidationEngine
+        engine = ValidationEngine(run)
+
+        # Since it is mocked due to dummy_host, get_aggregation returns 1250 for row_count, unique_check, count, distinct_count.
+        res = engine._run_check(col_map, 'count')
+        self.assertTrue(res.is_match)
+        self.assertEqual(res.source_value, '1250')
+        self.assertEqual(res.target_value, '1250')
+
+
+import os
+from workflows.models import Workflow, EmailNotification
+
+class AutomatedEmailNotificationTestCase(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='testemailuser', password='password123')
+        from accounts.models import UserProfile
+        profile, created = UserProfile.objects.get_or_create(user=self.user)
+        profile.role = 'contributor'
+        profile.save()
+
+        self.source_conn = DataConnection.objects.create(
+            name='Src Conn',
+            connection_type='postgresql',
+            host='dummy',
+            database_name='src_db',
+            created_by=self.user
+        )
+        self.target_conn = DataConnection.objects.create(
+            name='Tgt Conn',
+            connection_type='postgresql',
+            host='dummy',
+            database_name='tgt_db',
+            created_by=self.user
+        )
+        self.mapping = Mapping.objects.create(
+            name='Daily Customer Sync',
+            source_connection=self.source_conn,
+            source_table='customers',
+            target_connection=self.target_conn,
+            target_table='customers',
+            created_by=self.user
+        )
+        self.col_map = ColumnMapping.objects.create(
+            mapping=self.mapping,
+            source_column='customer_id',
+            source_datatype='INTEGER',
+            target_column='customer_id',
+            target_datatype='INTEGER'
+        )
+        self.rule = ValidationRule.objects.create(
+            column_mapping=self.col_map,
+            operation='count'
+        )
+        self.workflow = Workflow.objects.create(
+            name='Customer_Data_Reconciliation',
+            description='Customer Master Data Validation',
+            mapping=self.mapping,
+            recipient_email='recipient@example.com',
+            created_by=self.user
+        )
+
+    def test_report_generation(self):
+        run = ValidationRun.objects.create(
+            mapping=self.mapping,
+            workflow=self.workflow,
+            status='completed',
+            triggered_by=self.user,
+            trigger_type='scheduled',
+            total_checks=1,
+            passed_checks=1,
+            failed_checks=0
+        )
+        from validations.models import ValidationResult
+        ValidationResult.objects.create(
+            run=run,
+            column_mapping=self.col_map,
+            operation='count',
+            source_value='100',
+            target_value='100',
+            is_match=True,
+            difference='0'
+        )
+
+        from notifications.report_generator import generate_excel_report
+        filepath = generate_excel_report(run)
+        self.assertTrue(filepath.endswith('.xlsx'))
+        self.assertTrue(os.path.exists(filepath))
+        if os.path.exists(filepath):
+            os.remove(filepath)
+
+    def test_email_sending_flow(self):
+        run = ValidationRun.objects.create(
+            mapping=self.mapping,
+            workflow=self.workflow,
+            status='completed',
+            triggered_by=self.user,
+            trigger_type='scheduled',
+            total_checks=1,
+            passed_checks=0,
+            failed_checks=1
+        )
+        from validations.models import ValidationResult
+        ValidationResult.objects.create(
+            run=run,
+            column_mapping=self.col_map,
+            operation='count',
+            source_value='100',
+            target_value='98',
+            is_match=False,
+            difference='2'
+        )
+
+        from notifications.email_service import send_validation_email
+        notification = send_validation_email(run)
+        
+        self.assertIsNotNone(notification)
+        self.assertEqual(notification.recipient_email, 'recipient@example.com')
+        self.assertEqual(notification.sent_status, 'success')
+        self.assertIn('Customer_Data_Reconciliation', notification.subject)
+        self.assertIn('Status: Failed', notification.email_body)
+        self.assertTrue(os.path.exists(notification.attachment_path))
+        
+        if os.path.exists(notification.attachment_path):
+            os.remove(notification.attachment_path)
+
+    def test_api_send_email_endpoint(self):
+        self.client.login(username='testemailuser', password='password123')
+        run = ValidationRun.objects.create(
+            mapping=self.mapping,
+            workflow=self.workflow,
+            status='completed',
+            triggered_by=self.user,
+            trigger_type='manual',
+            total_checks=1,
+            passed_checks=1,
+            failed_checks=0
+        )
+        from validations.models import ValidationResult
+        ValidationResult.objects.create(
+            run=run,
+            column_mapping=self.col_map,
+            operation='count',
+            source_value='100',
+            target_value='100',
+            is_match=True,
+            difference='0'
+        )
+
+        url = reverse('validations:api_send_email', args=[run.id])
+        response = self.client.post(url, json.dumps({'email': 'manual_recipient@example.com'}), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertIn('Report email successfully sent', data['message'])
+
+        # Verify EmailNotification record
+        notification = EmailNotification.objects.filter(run=run).latest('created_at')
+        self.assertEqual(notification.recipient_email, 'manual_recipient@example.com')
+        self.assertEqual(notification.sent_status, 'success')
+        
+        if os.path.exists(notification.attachment_path):
+            os.remove(notification.attachment_path)
+
+

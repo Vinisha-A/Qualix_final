@@ -14,4 +14,5 @@ urlpatterns = [
     path('api/progress/<int:run_id>/', views.api_validation_progress, name='api_progress'),
     path('api/trigger/<int:mapping_id>/', views.api_trigger_validation, name='api_trigger'),
     path('api/mapping/<int:mapping_id>/rules-metadata/', views.api_mapping_rules_metadata, name='api_mapping_rules_metadata'),
+    path('api/send-email/<int:run_id>/', views.api_send_report_email, name='api_send_email'),
 ]

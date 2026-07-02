@@ -60,10 +60,10 @@ class NotificationTestCase(TestCase):
         self.assertEqual(clear_response.status_code, 200)
         self.assertTrue(clear_response.json()['success'])
         
-        # Retrieve and verify unread count is now 0
+        # Retrieve and verify unread count is now 0, and notifications list is empty
         response = self.client.get(reverse('dashboard:api_get_notifications'))
         self.assertEqual(response.json()['unread_count'], 0)
-        self.assertEqual(response.json()['notifications'][0]['is_read'], True)
+        self.assertEqual(len(response.json()['notifications']), 0)
 
 
 class HelpCenterTestCase(TestCase):

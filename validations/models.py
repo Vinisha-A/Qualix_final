@@ -19,6 +19,7 @@ class ValidationRun(models.Model):
     ]
 
     mapping = models.ForeignKey(Mapping, on_delete=models.CASCADE, related_name='validation_runs')
+    workflow = models.ForeignKey('workflows.Workflow', on_delete=models.SET_NULL, null=True, blank=True, related_name='validation_runs')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     triggered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     trigger_type = models.CharField(max_length=20, choices=TRIGGER_CHOICES, default='manual')
