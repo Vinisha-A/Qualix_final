@@ -336,3 +336,39 @@ class ConnectionViewsTestCase(TestCase):
             'databricks://token:dapi+token+123@databricks-host?http_path=sql/protocolv1/o/123/http_path_value'
         )
 
+    def test_lakehouse_parameter_conversion(self):
+        from unittest.mock import MagicMock, patch
+        import pandas as pd
+        from connections.connector import ConnectorEngine
+
+        lakehouse_conn = DataConnection.objects.create(
+            name='Test Lakehouse',
+            connection_type='lakehouse',
+            host='lakehouse-host',
+            port=8443,
+            database_name='lakehouse_db',
+            username='user',
+            created_by=self.user
+        )
+        engine = ConnectorEngine(lakehouse_conn)
+
+        with patch.object(engine, 'is_mocked', return_value=False), \
+             patch.object(engine, 'get_lakehouse_connection') as mock_get_conn, \
+             patch('pandas.read_sql') as mock_read_sql:
+            
+            mock_conn = MagicMock()
+            mock_get_conn.return_value = mock_conn
+            mock_read_sql.return_value = pd.DataFrame([{'result': 42}])
+
+            query = "SELECT COUNT(*) AS result FROM my_table WHERE created_at >= :date_start AND created_at <= :date_end"
+            params = {'date_start': '2026-01-01T00:00', 'date_end': '2026-01-10T14:30'}
+
+            res = engine.execute_query(query, params)
+
+            # Assert that read_sql was called with the modified query containing '?' and positional params list
+            expected_query = "SELECT COUNT(*) AS result FROM my_table WHERE created_at >= ? AND created_at <= ?"
+            expected_params = ['2026-01-01', '2026-01-10 14:30']
+
+            mock_read_sql.assert_called_once_with(expected_query, mock_conn, params=expected_params)
+
+

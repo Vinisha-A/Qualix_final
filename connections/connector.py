@@ -891,11 +891,36 @@ class ConnectorEngine:
             return pd.DataFrame()
         start_time = time.time()
         try:
+            # Clean ISO-8601 'T' format out of any date parameters for all connections
+            if params and isinstance(params, dict):
+                cleaned_params = {}
+                for k, val in params.items():
+                    if isinstance(val, str) and len(val) >= 10 and val[4] == '-' and val[7] == '-':
+                        val = val.replace('T', ' ')
+                        if val.endswith(' 00:00'):
+                            val = val[:-6]
+                    cleaned_params[k] = val
+                params = cleaned_params
             if self.connection.connection_type == 'lakehouse' and not self.is_mocked():
                 conn = self.get_lakehouse_connection()
                 # Disable rollback if driver/db doesn't support it to prevent SQLException masking original error
                 conn.rollback = lambda *args, **kwargs: None
                 try:
+                    if params and isinstance(params, dict):
+                        import re
+                        pattern = re.compile(r':([a-zA-Z_][a-zA-Z0-9_]*)')
+                        positional_params = []
+                        
+                        def replace_placeholder(match):
+                            name = match.group(1)
+                            if name in params:
+                                positional_params.append(params[name])
+                                return '?'
+                            return match.group(0)
+                        
+                        query = pattern.sub(replace_placeholder, query)
+                        params = positional_params
+                        
                     df = pd.read_sql(query, conn, params=params)
                 finally:
                     try:

@@ -5,13 +5,24 @@
 
 {% block content %}
 <div class="card">
-    <div class="card-header">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
         <h2><i class="fas fa-project-diagram" style="color: var(--primary); margin-right: 8px;"></i> Pipelines ({{ mappings|length }})</h2>
-        {% if user_profile.role != 'auditor' %}
-        <a href="{% url 'mappings:create' %}" class="btn btn-primary btn-sm">
-            <i class="fas fa-plus"></i> New Pipeline
-        </a>
-        {% endif %}
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <form method="get" action="" style="display: flex; gap: 8px; align-items: center; margin: 0;">
+                <input type="text" name="query" class="form-control" placeholder="Search pipelines..." value="{{ query|default:'' }}" style="width: 240px; height: 38px; border-radius: 6px; margin: 0;">
+                <button type="submit" class="btn btn-primary" style="height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; padding: 0 16px; font-size: 14px; font-weight: 500; cursor: pointer;">
+                    <i class="fas fa-search" style="margin-right: 6px;"></i> Search
+                </button>
+                {% if query %}
+                <a href="?" class="btn btn-secondary" style="height: 38px; display: inline-flex; align-items: center; justify-content: center; background: #fff; border: 1px solid #CBD5E1; color: #1E293B; border-radius: 6px; padding: 0 16px; font-weight: 500; font-size: 14px; text-decoration: none;">Clear</a>
+                {% endif %}
+            </form>
+            {% if user_profile.role != 'auditor' %}
+            <a href="{% url 'mappings:create' %}" class="btn btn-primary btn-sm" style="height: 38px; display: inline-flex; align-items: center;">
+                <i class="fas fa-plus"></i> New Pipeline
+            </a>
+            {% endif %}
+        </div>
     </div>
     <div class="card-body p-0">
         <div class="table-container">

@@ -4,6 +4,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
+from django.db.models import Q
 
 from .models import Mapping, ColumnMapping, ValidationRule
 from connections.models import DataConnection
@@ -15,10 +16,23 @@ logger = logging.getLogger(__name__)
 @login_required
 def mapping_list_view(request):
     """List all mappings."""
+    query = request.GET.get('query', '').strip()
+    
     mappings = Mapping.objects.filter(is_active=True).select_related(
         'source_connection', 'target_connection', 'created_by'
     )
-    return render(request, 'mappings/list.html', {'mappings': mappings})
+    
+    if query:
+        mappings = mappings.filter(
+            Q(name__icontains=query) |
+            Q(description__icontains=query) |
+            Q(source_table__icontains=query) |
+            Q(target_table__icontains=query) |
+            Q(source_connection__name__icontains=query) |
+            Q(target_connection__name__icontains=query)
+        )
+        
+    return render(request, 'mappings/list.html', {'mappings': mappings, 'query': query})
 
 
 def get_datatype_category(type_str, name_str=''):
